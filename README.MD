@@ -1,4 +1,11 @@
-Valorant random match making
+Valorant random match making- users find random duos here
+
+-- no text , only voice chat to combat ai bots
+-- split by regions, find a way to group ranks
+-- find a way to be able to easily 1 click invite into your current lobby!!!!! very important
+-- PC only
+-- must eventually be able to choose between casual/competitive play
+--keep it fast and free somehow
 
 tech stack
 
