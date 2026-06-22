@@ -2,22 +2,27 @@ package com.sedanodev.valomegle.service;
 
 import java.util.Date;
 
+import javax.crypto.SecretKey;
+
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 
 import io.jsonwebtoken.Jwts;
-import io.jsonwebtoken.SignatureAlgorithm;
+import io.jsonwebtoken.security.Keys;
 
 @Service
 public class JwtService {
 
-    private final String SECRET_KEY = "password";
+    @Value("${jwt.secret}")
+    private String secret;
 
     public String generateToken(String username) {
+        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes());
         return Jwts.builder()
-                .setSubject(username)
-                .setIssuedAt(new Date())
-                .setExpiration(new Date(System.currentTimeMillis() + 1000 * 60 * 60 * 24)) // 24hrs
-                .signWith(SignatureAlgorithm.HS256, SECRET_KEY)
+                .subject(username)
+                .issuedAt(new Date())
+                .expiration(new Date(System.currentTimeMillis() + 1000L * 60 * 60 * 24))
+                .signWith(key)
                 .compact();
     }
 }
