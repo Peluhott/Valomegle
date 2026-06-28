@@ -25,4 +25,14 @@ public class JwtService {
                 .signWith(key)
                 .compact();
     }
+
+    public String extractUsername(String token) {
+        SecretKey key = Keys.hmacShaKeyFor(secret.getBytes());
+        return Jwts.parser()
+                .verifyWith(key)
+                .build()
+                .parseSignedClaims(token)
+                .getPayload()
+                .getSubject();
+    }
 }

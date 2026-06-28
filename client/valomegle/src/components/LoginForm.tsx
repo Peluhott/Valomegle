@@ -1,27 +1,28 @@
 import React, {useState} from 'react';
 import axios from 'axios';
-
+import { useNavigate } from 'react-router-dom';
 type LoginFormProps = {
 handleSwitchForm: () => void;
 }
 
+
+
 export default function LoginForm({ handleSwitchForm }: LoginFormProps) {
+    const navigate = useNavigate();
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
 
-    const handleSubmit = async (e: React.SubmitEvent<HTMLFormElement>) => {
+    const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
         e.preventDefault();
-
-        // send login request to server
         try {
             const response = await axios.post('http://localhost:8080/api/users/login', { username, password });
-            localStorage.setItem('token', response.data.token);
-            console.log('Login successful');
+            localStorage.setItem('token', response.data);
+            navigate('/dashboard'); // redirect after login
         } catch (error) {
             console.error(error);
         }
-        //save token
     }
+    
 
     return (
         <form onSubmit={handleSubmit}>

@@ -1,15 +1,16 @@
-
-
-import WelcomeDashboard from "./pages/WelcomeDashboard"
+import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import WelcomeDashboard from './pages/WelcomeDashboard';
+import Dashboard from './pages/Dashboard';
 
 function App() {
-  
-
   return (
-    <>
-      <WelcomeDashboard/>
-    </>
+    <BrowserRouter>
+      <Routes>
+        <Route path="/" element={<WelcomeDashboard />} />
+        <Route path="/dashboard" element={<Dashboard />} />
+      </Routes>
+    </BrowserRouter>
   )
 }
 
-export default App
+export default App;

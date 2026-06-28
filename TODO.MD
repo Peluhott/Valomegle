@@ -1,5 +1,5 @@
-create frontend for register and login using react with typescript
+finish implementing websocket
 
-put together components for welcome page
+add a feature for user to poke another to make sure it works
 
-add call with axios to login or register
+replace poke feature with p2p communication
