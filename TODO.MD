@@ -1,5 +1,4 @@
-finish implementing websocket
 
-add a feature for user to poke another to make sure it works
+add call, calling , accept, reject buttons on users dashboards
 
-replace poke feature with p2p communication
+make it to when a user sends a call it shows the buttons with user info 
