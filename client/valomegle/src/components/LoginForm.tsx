@@ -36,7 +36,7 @@ export default function LoginForm({ handleSwitchForm }: LoginFormProps) {
                 </div>
             )}
             <div>
-                <label htmlFor="username" className="block text-sm font-medium text-slate-300 mb-1">
+                <label htmlFor="username" className="block text-sm font-medium text-neutral-300 mb-1">
                     Username
                 </label>
                 <input
@@ -45,11 +45,11 @@ export default function LoginForm({ handleSwitchForm }: LoginFormProps) {
                     placeholder="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:border-transparent"
                 />
             </div>
             <div>
-                <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-neutral-300 mb-1">
                     Password
                 </label>
                 <input
@@ -58,19 +58,19 @@ export default function LoginForm({ handleSwitchForm }: LoginFormProps) {
                     placeholder="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:ring-2 focus:ring-neutral-400 focus:border-transparent"
                 />
             </div>
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2 px-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-600 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+                className="w-full py-2 px-4 bg-white hover:bg-neutral-200 disabled:bg-neutral-700 disabled:cursor-not-allowed text-black font-semibold rounded-lg transition-colors"
             >
                 {loading ? 'Signing in...' : 'Sign in'}
             </button>
-            <p className="text-center text-sm text-slate-400">
+            <p className="text-center text-sm text-neutral-400">
                 Don't have an account?{' '}
-                <button type="button" onClick={handleSwitchForm} className="text-indigo-400 hover:text-indigo-300 underline">
+                <button type="button" onClick={handleSwitchForm} className="text-neutral-300 hover:text-white underline">
                     Create one
                 </button>
             </p>

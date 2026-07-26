@@ -13,12 +13,12 @@ const Nav = ({ showLogout = false }: NavProps) => {
     };
 
     return (
-        <nav className="flex items-center justify-between h-16 px-6 bg-slate-900 border-b border-slate-700">
+        <nav className="flex items-center justify-between h-16 px-6 bg-neutral-950 border-b border-neutral-800">
             <span className="text-white text-lg font-bold tracking-wide">Valomegle</span>
             {showLogout && (
                 <button
                     onClick={handleLogout}
-                    className="text-sm text-slate-400 hover:text-white transition-colors"
+                    className="text-sm text-neutral-400 hover:text-white transition-colors"
                 >
                     Log out
                 </button>

@@ -30,4 +30,12 @@ public class User {
     @Column(nullable = false)
     private String password;
 
+    private String firstName;
+
+    private String lastName;
+
+    private String rank;
+
+    private String region;
+
 }

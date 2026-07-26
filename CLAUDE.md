@@ -14,14 +14,14 @@ Two independent projects in one repo, no shared tooling/workspace:
 
 - Backend: `./mvnw spring-boot:run` from `valomegle/` — requires a `.env` file in that directory (copy `valomegle/.env.example`; needs `DB_URL`, `DB_USERNAME`, `DB_PASSWORD` for Postgres and `JWT_SECRET`, ≥32 chars).
 - Frontend: `npm run dev` from `client/valomegle/` (Vite dev server, default `http://localhost:5173`).
-- Backend expects the frontend origin `http://localhost:5173` for CORS/WebSocket (`config/CorsConfig.java`, `config/WebSocketConfig.java`); update both if the frontend port/origin changes.
+- Backend expects the frontend origin `http://localhost:5173` for CORS/WebSocket (`security/SecurityConfig.java`'s `corsConfigurationSource` bean, `websocket/WebSocketConfig.java`); update both if the frontend port/origin changes. CORS is wired into the Security filter chain via `.cors(Customizer.withDefaults())` — without that, preflight `OPTIONS` requests to any non-`permitAll` route get rejected by `anyRequest().authenticated()` before CORS headers are ever added.
 - Backend logs to `valomegle/logs/valomegle.log` (rolling file), console logging is disabled — check the log file, not stdout, when debugging backend behavior.
 
 ## Architecture notes
 
 - WebSocket auth is manual: the client connects to `/ws?token=<jwt>` and `websocket/WebSocketHandler.java` extracts/validates the JWT itself from the raw query string — it does not go through Spring Security's filter chain.
 - `websocket/WebSocketSessionManager.java` is a simple in-memory `userId -> session` map. Messages are relayed directly to a known `targetUserId`; there is no queue/room/matchmaking concept yet.
-- Known gap: Spring Security's `SecurityConfig` sets `anyRequest().authenticated()`, but there is no JWT filter (`OncePerRequestFilter`) registered to populate the security context from the `Authorization` header — only the WebSocket handler actually verifies tokens. Flag this if working on auth or adding new protected REST endpoints; don't silently assume protected routes are enforced.
+- `security/JwtAuthFilter.java` populates the security context from the `Authorization: Bearer <token>` header on regular HTTP requests (registered via `.addFilterBefore` in `SecurityConfig`), so `anyRequest().authenticated()` is actually enforced for REST routes now. On an invalid/missing token it just leaves the request unauthenticated (no exception thrown) and lets Spring Security's default 401 handle it.
 
 ## Conventions
 

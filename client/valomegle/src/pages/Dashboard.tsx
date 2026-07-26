@@ -30,7 +30,7 @@ export default function Dashboard() {
     };
 
     return (
-        <div className="flex flex-col h-screen bg-slate-900">
+        <div className="flex flex-col h-screen bg-neutral-950">
             <Nav showLogout />
 
             <div className="flex flex-1 overflow-hidden">
@@ -38,8 +38,8 @@ export default function Dashboard() {
                 <main className="flex flex-col flex-1 items-center justify-center gap-4 p-6">
                     <Connect handleConnect={handleConnect} />
                     {message && (
-                        <div className="w-full max-w-sm px-4 py-3 bg-slate-700 border border-slate-600 rounded-lg text-slate-200 text-sm">
-                            <span className="text-slate-400 text-xs uppercase tracking-wide block mb-1">Incoming</span>
+                        <div className="w-full max-w-sm px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-200 text-sm">
+                            <span className="text-neutral-400 text-xs uppercase tracking-wide block mb-1">Incoming</span>
                             {message}
                         </div>
                     )}
