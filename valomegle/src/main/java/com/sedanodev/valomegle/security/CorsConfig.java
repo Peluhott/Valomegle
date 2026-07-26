@@ -1,4 +1,4 @@
-package com.sedanodev.valomegle.config;
+package com.sedanodev.valomegle.security;
 
 // src/main/java/com/yourapp/config/CorsConfig.java
 import org.springframework.context.annotation.Configuration;

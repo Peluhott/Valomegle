@@ -1,4 +1,4 @@
-package com.sedanodev.valomegle.config;
+package com.sedanodev.valomegle.websocket;
 
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.WebSocketHandler;

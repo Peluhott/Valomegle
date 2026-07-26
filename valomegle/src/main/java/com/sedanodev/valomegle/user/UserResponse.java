@@ -1,4 +1,4 @@
-package com.sedanodev.valomegle.dto;
+package com.sedanodev.valomegle.user;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

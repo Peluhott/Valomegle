@@ -1,4 +1,4 @@
-package com.sedanodev.valomegle.controllers;
+package com.sedanodev.valomegle.user;
 
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.parameters.P;
@@ -6,11 +6,6 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
-
-import com.sedanodev.valomegle.dto.CreateUser;
-import com.sedanodev.valomegle.dto.LoginRequest;
-import com.sedanodev.valomegle.dto.UserResponse;
-import com.sedanodev.valomegle.service.UserService;
 
 @RestController
 @RequestMapping("/api/users")

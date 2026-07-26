@@ -1,14 +1,8 @@
-package com.sedanodev.valomegle.service;
-
-import com.sedanodev.valomegle.dto.CreateUser;
-import com.sedanodev.valomegle.dto.LoginRequest;
-import com.sedanodev.valomegle.dto.UserResponse;
-import com.sedanodev.valomegle.models.User;
-import com.sedanodev.valomegle.repositories.UserRepository;
+package com.sedanodev.valomegle.user;
 
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
-import com.sedanodev.valomegle.service.JwtService;
+import com.sedanodev.valomegle.security.JwtService;
 
 @Service
 public class UserService {

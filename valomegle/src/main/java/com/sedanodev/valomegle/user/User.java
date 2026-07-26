@@ -1,4 +1,4 @@
-package com.sedanodev.valomegle.models;
+package com.sedanodev.valomegle.user;
 
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;

@@ -1,4 +1,4 @@
-package com.sedanodev.valomegle.service;
+package com.sedanodev.valomegle.security;
 
 import java.util.Date;
 

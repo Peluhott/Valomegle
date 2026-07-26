@@ -8,7 +8,7 @@ import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
-import com.sedanodev.valomegle.service.JwtService;
+import com.sedanodev.valomegle.security.JwtService;
 
 @Component
 public class WebSocketHandler extends TextWebSocketHandler {
