@@ -21,45 +21,25 @@ public class UserController {
 
     @PostMapping("/login")
     public ResponseEntity<String> login(@RequestBody LoginRequest request) {
-        try {
-            String token = userService.login(request);
-            return ResponseEntity.ok(token);
-        } catch (Exception e) {
-            return ResponseEntity.status(401).body(e.getMessage());
-        }
-
+        String token = userService.login(request);
+        return ResponseEntity.ok(token);
     }
 
     @PostMapping("/register")
     public ResponseEntity<?> register(@RequestBody CreateUser request) {
-        try {
-            UserResponse response = userService.createUser(request);
-            return ResponseEntity.status(201).body(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(400).body(e.getMessage());
-        }
-
+        UserResponse response = userService.createUser(request);
+        return ResponseEntity.status(201).body(response);
     }
 
     @GetMapping("/me")
     public ResponseEntity<?> getProfile(Authentication authentication) {
-        try {
-            ProfileResponse response = userService.getProfile(authentication.getName());
-            return ResponseEntity.ok(response);
-        } catch (Exception e) {
-            return ResponseEntity.status(404).body(e.getMessage());
-        }
+        ProfileResponse response = userService.getProfile(authentication.getName());
+        return ResponseEntity.ok(response);
     }
 
     @PutMapping("/me")
     public ResponseEntity<?> updateProfile(Authentication authentication, @RequestBody UpdateProfileRequest request) {
-        try {
-            ProfileResponse response = userService.updateProfile(authentication.getName(), request);
-            return ResponseEntity.ok(response);
-        } catch (IllegalArgumentException e) {
-            return ResponseEntity.status(400).body(e.getMessage());
-        } catch (Exception e) {
-            return ResponseEntity.status(404).body(e.getMessage());
-        }
+        ProfileResponse response = userService.updateProfile(authentication.getName(), request);
+        return ResponseEntity.ok(response);
     }
 }
