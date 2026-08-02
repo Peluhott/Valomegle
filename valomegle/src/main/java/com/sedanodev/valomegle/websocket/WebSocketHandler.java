@@ -2,6 +2,7 @@ package com.sedanodev.valomegle.websocket;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
@@ -37,17 +38,30 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
-        String payload = message.getPayload();
         ObjectMapper mapper = new ObjectMapper();
-        JsonNode node = mapper.readTree(payload);
+        JsonNode node = mapper.readTree(message.getPayload());
 
+        String fromUserId = (String) session.getAttributes().get("userId");
         String targetUserId = node.get("targetUserId").asText();
-        String msg = node.get("message").asText();
+        String type = node.get("type").asText();
+        JsonNode signalPayload = node.get("payload");
 
+        relay(fromUserId, targetUserId, type, signalPayload);
+    }
+
+    private void relay(String fromUserId, String targetUserId, String type, JsonNode signalPayload) throws Exception {
         WebSocketSession targetSession = sessionManager.getSession(targetUserId);
-        if (targetSession != null && targetSession.isOpen()) {
-            targetSession.sendMessage(new TextMessage(msg));
+        if (targetSession == null || !targetSession.isOpen()) {
+            return;
         }
+
+        ObjectMapper mapper = new ObjectMapper();
+        ObjectNode outgoing = mapper.createObjectNode();
+        outgoing.put("fromUserId", fromUserId);
+        outgoing.put("type", type);
+        outgoing.set("payload", signalPayload);
+
+        targetSession.sendMessage(new TextMessage(mapper.writeValueAsString(outgoing)));
     }
 
     @Override

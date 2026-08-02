@@ -3,6 +3,12 @@ import Nav from '../components/Nav';
 import SideBar from '../components/SideBar';
 import Connect from '../components/Connect';
 
+interface SignalMessage {
+    fromUserId: string;
+    type: string;
+    payload: unknown;
+}
+
 export default function Dashboard() {
     const [socket, setSocket] = useState<WebSocket | null>(null);
     const [message, setMessage] = useState('');
@@ -12,7 +18,14 @@ export default function Dashboard() {
         const ws = new WebSocket(`ws://localhost:8080/ws?token=${token}`);
 
         ws.onopen = () => console.log('connected');
-        ws.onmessage = (event) => setMessage(event.data);
+        ws.onmessage = (event) => {
+            try {
+                const signal: SignalMessage = JSON.parse(event.data);
+                setMessage(`${signal.type} from ${signal.fromUserId}`);
+            } catch {
+                console.error('received non-JSON frame:', event.data);
+            }
+        };
         ws.onclose = () => console.log('disconnected');
 
         setSocket(ws);
@@ -24,7 +37,8 @@ export default function Dashboard() {
         if (socket) {
             socket.send(JSON.stringify({
                 targetUserId: userId,
-                message: 'poke!'
+                type: 'ping',
+                payload: {}
             }));
         }
     };

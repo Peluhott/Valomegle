@@ -62,8 +62,12 @@ public class UserService {
             throw new IllegalArgumentException("Invalid region: " + request.getRegion());
         }
 
-        user.setFirstName(request.getFirstName());
-        user.setLastName(request.getLastName());
+        if (request.getFirstName() != null) {
+            user.setFirstName(request.getFirstName());
+        }
+        if (request.getLastName() != null) {
+            user.setLastName(request.getLastName());
+        }
         if (request.getRank() != null) {
             user.setRank(request.getRank());
         }
