@@ -6,6 +6,9 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import com.sedanodev.valomegle.security.JwtService;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class UserService {
 
@@ -30,30 +33,42 @@ public class UserService {
         newUser.setPassword(passwordEncoder.encode(request.getPassword()));
 
         User saved = userRepository.save(newUser);
+        log.info("Registered new user: {}", saved.getUsername());
         return new UserResponse(saved.getId(), saved.getUsername(), saved.getEmail());
     }
 
     public String login(LoginRequest request) {
         User user = userRepository.findByUsername(request.getUsername())
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> {
+                    log.warn("Login failed, user not found: {}", request.getUsername());
+                    return new InvalidCredentialsException("Invalid username or password");
+                });
 
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
-            throw new RuntimeException("Invalid password");
+            log.warn("Login failed, invalid password for user: {}", request.getUsername());
+            throw new InvalidCredentialsException("Invalid username or password");
         }
 
+        log.info("User logged in: {}", user.getUsername());
         return jwtService.generateToken(user.getUsername());
     }
 
     public ProfileResponse getProfile(String username) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> {
+                    log.warn("Profile lookup failed, user not found: {}", username);
+                    return new UserNotFoundException("User not found");
+                });
         return new ProfileResponse(user.getUsername(), user.getFirstName(), user.getLastName(),
                 user.getRank(), user.getRegion());
     }
 
     public ProfileResponse updateProfile(String username, UpdateProfileRequest request) {
         User user = userRepository.findByUsername(username)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+                .orElseThrow(() -> {
+                    log.warn("Profile update failed, user not found: {}", username);
+                    return new UserNotFoundException("User not found");
+                });
 
         if (request.getRank() != null && !VALID_RANKS.contains(request.getRank())) {
             throw new IllegalArgumentException("Invalid rank: " + request.getRank());
