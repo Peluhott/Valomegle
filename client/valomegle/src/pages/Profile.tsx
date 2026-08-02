@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import axios from 'axios';
+import apiClient from '../api/client';
 import Nav from '../components/Nav';
 import SideBar from '../components/SideBar';
 
@@ -18,10 +18,7 @@ export default function Profile() {
     const [saved, setSaved] = useState(false);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        axios.get('http://localhost:8080/api/users/me', {
-            headers: { Authorization: `Bearer ${token}` },
-        }).then((res) => {
+        apiClient.get('/api/users/me').then((res) => {
             setUsername(res.data.username ?? '');
             setFirstName(res.data.firstName ?? '');
             setLastName(res.data.lastName ?? '');
@@ -36,15 +33,12 @@ export default function Profile() {
         setError('');
         setSaved(false);
         setSaving(true);
-        const token = localStorage.getItem('token');
         try {
-            const res = await axios.put('http://localhost:8080/api/users/me', {
+            const res = await apiClient.put('/api/users/me', {
                 firstName: firstName || null,
                 lastName: lastName || null,
                 rank: rank || null,
                 region: region || null,
-            }, {
-                headers: { Authorization: `Bearer ${token}` },
             });
             setFirstName(res.data.firstName ?? '');
             setLastName(res.data.lastName ?? '');

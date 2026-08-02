@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import apiClient from '../api/client';
 import { useNavigate } from 'react-router-dom';
 
 type LoginFormProps = {
@@ -18,7 +18,7 @@ export default function LoginForm({ handleSwitchForm }: LoginFormProps) {
         setError('');
         setLoading(true);
         try {
-            const response = await axios.post('http://localhost:8080/api/users/login', { username, password });
+            const response = await apiClient.post('/api/users/login', { username, password });
             localStorage.setItem('token', response.data);
             navigate('/dashboard');
         } catch {

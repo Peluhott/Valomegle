@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import axios from 'axios';
+import apiClient from '../api/client';
 
 type RegisterFormProps = {
     handleSwitchForm: () => void;
@@ -17,7 +17,7 @@ export default function RegisterForm({ handleSwitchForm }: RegisterFormProps) {
         setError('');
         setLoading(true);
         try {
-            await axios.post('http://localhost:8080/api/users/register', { username, email, password });
+            await apiClient.post('/api/users/register', { username, email, password });
             handleSwitchForm();
         } catch {
             setError('Registration failed. Username or email may already be taken.');
