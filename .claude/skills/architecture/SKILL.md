@@ -65,5 +65,6 @@ _in what order_, then hands each piece to a coding subagent.
      fits better.
 6. **This skill's job ends once the pieces are implemented.** It doesn't
    review its own output — that's what the `review` skill is for. Once the
-   subagents finish, say so plainly and suggest running `review` on the
-   resulting diff rather than declaring the task fully verified.
+   subagents finish, always run `review` on the resulting diff, then `report`
+   to log the task, before declaring it done — both are mandatory, not a
+   suggestion.

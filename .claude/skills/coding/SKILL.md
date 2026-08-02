@@ -63,3 +63,13 @@ whatever's already writing the code.
   parameter, or a non-obvious side effect genuinely needs explaining to a
   caller who can't infer it from the signature. Don't add boilerplate
   doc-comments to every method just for coverage.
+
+## Before considering it done
+
+Once a coding change is complete, always run the `review` skill on the
+resulting diff, then the `report` skill to log it, before calling the task
+finished. Neither is situational — both apply to every coding task in this
+repo, not just ones planned through `architecture`. Don't skip `review`
+because the change felt small or obviously correct; that's exactly the
+judgment it exists to double-check. Don't skip `report` either — it's how
+the user reviews what happened without re-reading the whole conversation.

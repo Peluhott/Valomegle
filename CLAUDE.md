@@ -31,10 +31,11 @@ Two independent projects in one repo, no shared tooling/workspace:
 
 ## Skills
 
-This repo has three project skills in `.claude/skills/` — use them for implementation work, not just when the user names them explicitly:
+This repo has four project skills in `.claude/skills/` — use them for implementation work, not just when the user names them explicitly:
 
 - **`architecture`** — for any task that spans multiple files or both `valomegle/` and `client/valomegle/`, or is otherwise too large for a single direct edit. Plans the change, breaks it into dependency-aware tasks, and delegates them to coding subagents (parallel where independent, sequential where not). Use this to plan before implementing non-trivial work.
 - **`coding`** — conventions to follow while writing or editing code in this repo: proper error handling, naming/formatting consistent with the surrounding code, and documentation only where the *why* isn't obvious. Applies inline, no subagent needed.
 - **`review`** — after non-trivial changes are made (by `architecture`'s subagents or otherwise), review the diff for duplicated code, breaking changes to callers of modified functions, and unnecessary solution complexity. Logs genuinely unclear security/performance-vs-simplicity tradeoffs to `TRADEOFFS.md` at the repo root instead of resolving them silently; delegates any fix rather than applying it inline.
+- **`report`** — the final step after `review`. Appends a dated entry to `REPORT_LOG.md` at the repo root: a short description of the task and what changed, the files affected, and anything uncertain the user should review (open tradeoffs, unverified assumptions, things not manually tested).
 
-Typical flow for a non-trivial task: `architecture` to plan and implement (using `coding` conventions throughout), then `review` on the result before considering it done.
+Every coding task ends with `review` then `report` on the resulting diff — this is mandatory, not just the typical/suggested flow, and applies whether the change was planned through `architecture` or made directly. Typical flow for non-trivial work: `architecture` to plan and implement (using `coding` conventions throughout), then `review`, then `report`, before considering it done.
