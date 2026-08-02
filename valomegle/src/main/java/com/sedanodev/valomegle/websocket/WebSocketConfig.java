@@ -1,5 +1,6 @@
 package com.sedanodev.valomegle.websocket;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.WebSocketHandler;
 import org.springframework.web.socket.config.annotation.EnableWebSocket;
@@ -12,6 +13,9 @@ public class WebSocketConfig implements WebSocketConfigurer {
 
     private final WebSocketHandler webSocketHandler;
 
+    @Value("${app.allowed-origins}")
+    private String[] allowedOrigins;
+
     public WebSocketConfig(WebSocketHandler webSocketHandler) {
         this.webSocketHandler = webSocketHandler;
     }
@@ -19,6 +23,6 @@ public class WebSocketConfig implements WebSocketConfigurer {
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(webSocketHandler, "/ws")
-                .setAllowedOrigins("http://localhost:5173", "https://yourdeployedsite.com");
+                .setAllowedOrigins(allowedOrigins);
     }
 }
