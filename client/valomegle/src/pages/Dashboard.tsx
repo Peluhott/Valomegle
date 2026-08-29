@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Nav from '../components/Nav';
 import SideBar from '../components/SideBar';
 import Connect from '../components/Connect';
+import { Ringtone } from '../audio/Ringtone';
 import { WebRTCSession } from '../webrtc/WebRTCSession';
 import type { CallConnectionState } from '../webrtc/WebRTCSession';
 
@@ -11,43 +12,85 @@ interface SignalMessage {
     payload: unknown;
 }
 
+const CALL_TIMEOUT_MS = 30000;
+
 export default function Dashboard() {
-    const [socket, setSocket] = useState<WebSocket | null>(null);
+    const [socketReady, setSocketReady] = useState(false);
     const [message, setMessage] = useState('');
     const [incomingCallFrom, setIncomingCallFrom] = useState<string | null>(null);
     const [pendingCallTo, setPendingCallTo] = useState<string | null>(null);
     const [activeCallPeer, setActiveCallPeer] = useState<string | null>(null);
     const [callState, setCallState] = useState<CallConnectionState | null>(null);
+
+    const socketRef = useRef<WebSocket | null>(null);
     const remoteAudioRef = useRef<HTMLAudioElement>(null);
     const webrtcSessionRef = useRef<WebRTCSession | null>(null);
+    const activeCallPeerRef = useRef<string | null>(null);
+    const isTearingDownRef = useRef(false);
+    const ringtoneRef = useRef<Ringtone | null>(null);
+    if (ringtoneRef.current === null) ringtoneRef.current = new Ringtone();
 
-    const sendSignal = useCallback((targetUserId: string, type: string, payload: unknown = {}) => {
-        if (!socket) return;
+    useEffect(() => {
+        activeCallPeerRef.current = activeCallPeer;
+    }, [activeCallPeer]);
+
+    const sendSignal = useCallback((targetUserId: string, type: string, payload: unknown = {}): boolean => {
+        const socket = socketRef.current;
+        if (socket?.readyState !== WebSocket.OPEN) {
+            setMessage('Connection not ready — try again');
+            return false;
+        }
         socket.send(JSON.stringify({ targetUserId, type, payload }));
-    }, [socket]);
+        return true;
+    }, []);
 
     const resetCallUi = useCallback(() => {
+        // hangUp() synchronously echoes onConnectionStateChange("disconnected");
+        // the flag tells that handler this teardown is already in progress.
+        isTearingDownRef.current = true;
         webrtcSessionRef.current?.hangUp();
+        isTearingDownRef.current = false;
+
         setActiveCallPeer(null);
         setCallState(null);
         if (remoteAudioRef.current) remoteAudioRef.current.srcObject = null;
     }, []);
 
+    const handleConnectionStateChange = useCallback((state: CallConnectionState) => {
+        setCallState(state);
+
+        if (state !== 'disconnected' && state !== 'failed') return;
+        if (isTearingDownRef.current || !activeCallPeerRef.current) return;
+
+        setMessage(state === 'failed' ? 'Call failed — connection lost' : 'Call ended');
+        resetCallUi();
+    }, [resetCallUi]);
+
     useEffect(() => {
         const token = localStorage.getItem('token');
         const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8080';
         const ws = new WebSocket(`${wsBaseUrl}/ws?token=${token}`);
+        socketRef.current = ws;
+        let unmounted = false;
 
-        ws.onopen = () => console.log('connected');
-        ws.onclose = () => console.log('disconnected');
+        ws.onopen = () => setSocketReady(true);
+        ws.onclose = () => {
+            setSocketReady(false);
+            if (socketRef.current === ws) socketRef.current = null;
+            if (!unmounted) setMessage('Connection closed — please refresh');
+        };
 
-        setSocket(ws);
-
-        return () => ws.close();
+        return () => {
+            unmounted = true;
+            setSocketReady(false);
+            socketRef.current = null;
+            ws.close();
+        };
     }, []);
 
     useEffect(() => {
-        if (!socket) return;
+        const socket = socketRef.current;
+        if (!socket || !socketReady) return;
 
         const handleMessage = (event: MessageEvent) => {
             try {
@@ -68,6 +111,9 @@ export default function Dashboard() {
                         if (pendingCallTo === signal.fromUserId) {
                             setMessage(`${signal.fromUserId} rejected your call`);
                             setPendingCallTo(null);
+                        } else if (incomingCallFrom === signal.fromUserId) {
+                            setMessage(`${signal.fromUserId} cancelled the call`);
+                            setIncomingCallFrom(null);
                         }
                         break;
                     case 'webrtc-offer':
@@ -83,6 +129,7 @@ export default function Dashboard() {
                         break;
                     case 'webrtc-hangup':
                         if (signal.fromUserId !== activeCallPeer) break;
+                        setMessage(`${signal.fromUserId} ended the call`);
                         resetCallUi();
                         break;
                     default:
@@ -95,14 +142,14 @@ export default function Dashboard() {
 
         socket.addEventListener('message', handleMessage);
         return () => socket.removeEventListener('message', handleMessage);
-    }, [socket, pendingCallTo, activeCallPeer, resetCallUi]);
+    }, [socketReady, pendingCallTo, activeCallPeer, incomingCallFrom, resetCallUi]);
 
     useEffect(() => {
-        if (!socket) return;
+        if (!socketReady) return;
 
         const session = new WebRTCSession({
             onSendSignal: sendSignal,
-            onConnectionStateChange: setCallState,
+            onConnectionStateChange: handleConnectionStateChange,
             onRemoteStream: (stream) => {
                 if (remoteAudioRef.current) {
                     remoteAudioRef.current.srcObject = stream;
@@ -117,28 +164,66 @@ export default function Dashboard() {
             session.hangUp();
             webrtcSessionRef.current = null;
         };
-    }, [socket, sendSignal]);
+    }, [socketReady, sendSignal, handleConnectionStateChange]);
+
+    // Ring while an outgoing call is ringing OR an incoming call is waiting to be
+    // answered. One effect (not two) so that when both are briefly true at once —
+    // you are calling someone and simultaneously get called — a single owner
+    // controls start/stop instead of one effect's cleanup silencing the other.
+    useEffect(() => {
+        const ringtone = ringtoneRef.current;
+        if ((!pendingCallTo && !incomingCallFrom) || !ringtone) return;
+        ringtone.start();
+        return () => ringtone.stop();
+    }, [pendingCallTo, incomingCallFrom]);
+
+    useEffect(() => {
+        return () => ringtoneRef.current?.stop();
+    }, []);
+
+    // Give up on an unanswered outgoing call after CALL_TIMEOUT_MS.
+    useEffect(() => {
+        if (!pendingCallTo) return;
+        const timeoutId = window.setTimeout(() => {
+            sendSignal(pendingCallTo, 'reject');
+            setMessage(`No answer from ${pendingCallTo}`);
+            setPendingCallTo(null);
+        }, CALL_TIMEOUT_MS);
+        return () => clearTimeout(timeoutId);
+    }, [pendingCallTo, sendSignal]);
+
+    // Drop an unanswered incoming call after CALL_TIMEOUT_MS; the caller times
+    // out on their own side, so no signal is sent here.
+    useEffect(() => {
+        if (!incomingCallFrom) return;
+        const timeoutId = window.setTimeout(() => {
+            setIncomingCallFrom(null);
+        }, CALL_TIMEOUT_MS);
+        return () => clearTimeout(timeoutId);
+    }, [incomingCallFrom]);
 
     const handleConnect = (userId: string) => {
-        if (socket) {
-            sendSignal(userId, 'call');
-            setPendingCallTo(userId);
-        }
+        if (sendSignal(userId, 'call')) setPendingCallTo(userId);
     };
 
     const handleAccept = () => {
-        if (socket && incomingCallFrom) {
-            sendSignal(incomingCallFrom, 'accept');
+        if (incomingCallFrom && sendSignal(incomingCallFrom, 'accept')) {
             setMessage(`Call with ${incomingCallFrom} accepted`);
             setIncomingCallFrom(null);
         }
     };
 
     const handleReject = () => {
-        if (socket && incomingCallFrom) {
-            sendSignal(incomingCallFrom, 'reject');
-            setIncomingCallFrom(null);
-        }
+        if (!incomingCallFrom) return;
+        sendSignal(incomingCallFrom, 'reject');
+        setIncomingCallFrom(null);
+    };
+
+    const handleCancel = () => {
+        if (!pendingCallTo) return;
+        sendSignal(pendingCallTo, 'reject');
+        setMessage(`Call to ${pendingCallTo} cancelled`);
+        setPendingCallTo(null);
     };
 
     const handleHangUp = () => {
@@ -178,7 +263,14 @@ export default function Dashboard() {
                     )}
                     {pendingCallTo && (
                         <div className="w-full max-w-sm px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-200 text-sm">
-                            Calling {pendingCallTo}...
+                            <p className="mb-3">Calling {pendingCallTo}...</p>
+                            <button
+                                type="button"
+                                onClick={handleCancel}
+                                className="w-full py-2 px-4 bg-neutral-700 hover:bg-neutral-600 text-white font-semibold rounded-lg transition-colors"
+                            >
+                                Cancel
+                            </button>
                         </div>
                     )}
                     {activeCallPeer && (

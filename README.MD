@@ -99,3 +99,18 @@ sender → Spring server → receiver
 ```
 
 When WebRTC is added for voice, the WebSocket shifts roles to become a **signaling server** — it will only exchange the WebRTC handshake (offer, answer, ICE candidates) between peers. The actual audio flows directly peer-to-peer, and the STUN server helps each client discover its public IP to make that direct connection possible.
+
+---
+
+## Running with Docker
+
+Requires Docker and Docker Compose.
+
+1. Copy `.env.example` to `.env` at the repo root and fill it in: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` (Neon.tech credentials), `JWT_SECRET`, `ALLOWED_ORIGINS`, and the build-time frontend vars `VITE_API_BASE_URL`/`VITE_WS_BASE_URL`.
+2. Run:
+
+```
+docker compose up --build
+```
+
+This builds and starts two containers — backend on `:8080`, frontend on `:5173`. There is **no database container**: `DB_URL` must point at Neon (or any other reachable Postgres instance), since the DB is intentionally kept external.

@@ -1,4 +1,7 @@
+create docker so that I can deployt and test this
 
-add call, calling , accept, reject buttons on users dashboards
+after all of this above is implemented and voice works and sounds good create matchmaking engine, at first start with random
 
-make it to when a user sends a call it shows the buttons with user info 
+after random works start making fallback turn server
+
+once turn server is created improve matchmaking engine
