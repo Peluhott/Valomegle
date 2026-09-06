@@ -3,7 +3,7 @@ services:
     image: redis:7-alpine
     ports: ["6379:6379"]
   backend:
-    build: ./valomegle
+    build: ./server
     ports: ["8080:8080"]
     depends_on: [redis]
     environment:
@@ -16,7 +16,7 @@ services:
       REDIS_PORT: ${REDIS_PORT:-6379}
   frontend:
     build:
-      context: ./client/valomegle
+      context: ./client
     # API_BASE_URL/WS_BASE_URL are read at container start (written into
     # config.js), not baked into the image, so the same built/pushed image
     # can point at a different backend just by changing these and restarting.

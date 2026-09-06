@@ -1,6 +1,6 @@
 ---
 name: architecture
-description: Plans out and delegates non-trivial implementation work in the Valomegle codebase — reads the task and the relevant files, designs a plan, breaks it into discrete tasks, and spins up coding subagents to execute them (in parallel where independent, sequentially where one depends on another). Use whenever a request needs changes across multiple files, both the backend (`valomegle/`) and frontend (`client/valomegle/`), or is otherwise too large to implement as a single direct edit. Always favors the simplest solution that fits, reuses existing code over duplicating it, and keeps OOP fundamentals in mind when shaping the plan.
+description: Plans out and delegates non-trivial implementation work in the Valomegle codebase — reads the task and the relevant files, designs a plan, breaks it into discrete tasks, and spins up coding subagents to execute them (in parallel where independent, sequentially where one depends on another). Use whenever a request needs changes across multiple files, both the backend (`server/`) and frontend (`client/`), or is otherwise too large to implement as a single direct edit. Always favors the simplest solution that fits, reuses existing code over duplicating it, and keeps OOP fundamentals in mind when shaping the plan.
 ---
 
 # Architecture
@@ -63,8 +63,8 @@ _in what order_, then hands each piece to a coding subagent.
      prompt — don't assume it's inherited.
    - Use `subagent_type: general-purpose` unless a more specific agent type
      fits better.
-6. **This skill's job ends once the pieces are implemented.** It doesn't
-   review its own output — that's what the `review` skill is for. Once the
-   subagents finish, always run `review` on the resulting diff, then `report`
-   to log the task, before declaring it done — both are mandatory, not a
-   suggestion.
+6. **This skill's job ends once the pieces are implemented.** Verify the
+   result compiles/builds/lints. The `review` and `report` skills are
+   available if the user asks for them, but running them automatically
+   after every task is no longer expected — the user reviews changes
+   directly now.

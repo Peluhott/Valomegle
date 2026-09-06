@@ -1,5 +1,5 @@
 .env
-valomegle/logs/
+server/logs/
 REPORT_LOG.md
 TODO.MD
 .claude/settings.local.json
