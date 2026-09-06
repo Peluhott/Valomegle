@@ -2,7 +2,6 @@ package com.sedanodev.valomegle.websocket;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
@@ -16,14 +15,16 @@ import com.sedanodev.valomegle.security.JwtService;
 @Component
 public class WebSocketHandler extends TextWebSocketHandler {
 
-    private static final ObjectMapper OBJECT_MAPPER = new ObjectMapper();
-
     private final WebSocketSessionManager sessionManager;
     private final JwtService jwtUtil;
+    private final WebSocketMessenger messenger;
+    private final ObjectMapper objectMapper;
 
-    public WebSocketHandler(WebSocketSessionManager sessionManager, JwtService jwtUtil) {
+    public WebSocketHandler(WebSocketSessionManager sessionManager, JwtService jwtUtil, WebSocketMessenger messenger, ObjectMapper objectMapper) {
         this.sessionManager = sessionManager;
         this.jwtUtil = jwtUtil;
+        this.messenger = messenger;
+        this.objectMapper = objectMapper;
     }
 
     @Override
@@ -53,7 +54,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
         JsonNode node;
         try {
-            node = OBJECT_MAPPER.readTree(message.getPayload());
+            node = objectMapper.readTree(message.getPayload());
         } catch (Exception e) {
             log.debug("Dropped frame from {}: malformed JSON", fromUserId);
             return;
@@ -68,21 +69,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
         String type = node.get("type").asText();
         JsonNode signalPayload = node.get("payload");
 
-        relay(fromUserId, targetUserId, type, signalPayload);
-    }
-
-    private void relay(String fromUserId, String targetUserId, String type, JsonNode signalPayload) throws Exception {
-        WebSocketSession targetSession = sessionManager.getSession(targetUserId);
-        if (targetSession == null || !targetSession.isOpen()) {
-            return;
-        }
-
-        ObjectNode outgoing = OBJECT_MAPPER.createObjectNode();
-        outgoing.put("fromUserId", fromUserId);
-        outgoing.put("type", type);
-        outgoing.set("payload", signalPayload);
-
-        targetSession.sendMessage(new TextMessage(OBJECT_MAPPER.writeValueAsString(outgoing)));
+        messenger.send(targetUserId, fromUserId, type, signalPayload);
     }
 
     @Override

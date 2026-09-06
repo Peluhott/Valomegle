@@ -106,11 +106,11 @@ When WebRTC is added for voice, the WebSocket shifts roles to become a **signali
 
 Requires Docker and Docker Compose.
 
-1. Copy `.env.example` to `.env` at the repo root and fill it in: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` (Neon.tech credentials), `JWT_SECRET`, `ALLOWED_ORIGINS`, and the build-time frontend vars `VITE_API_BASE_URL`/`VITE_WS_BASE_URL`.
+1. Copy `.env.example` to `.env` at the repo root and fill it in: `DB_URL`/`DB_USERNAME`/`DB_PASSWORD` (Neon.tech credentials), `JWT_SECRET`, `ALLOWED_ORIGINS`, and the frontend vars `API_BASE_URL`/`WS_BASE_URL`.
 2. Run:
 
 ```
 docker compose up --build
 ```
 
-This builds and starts two containers — backend on `:8080`, frontend on `:5173`. There is **no database container**: `DB_URL` must point at Neon (or any other reachable Postgres instance), since the DB is intentionally kept external.
+This builds and starts three containers — backend on `:8080`, frontend on `:5173`, and redis on `:6379` for the matchmaking queue. There is **no database container**: `DB_URL` must point at Neon (or any other reachable Postgres instance), since the DB is intentionally kept external. `API_BASE_URL`/`WS_BASE_URL` are read by the frontend container at startup rather than baked in at build time, so pointing it at a different backend host only requires changing those and restarting the frontend container, not rebuilding the image.

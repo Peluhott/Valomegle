@@ -2,9 +2,13 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import Nav from '../components/Nav';
 import SideBar from '../components/SideBar';
 import Connect from '../components/Connect';
+import Matchmaking from '../components/Matchmaking';
+import StatusCard from '../components/StatusCard';
+import ActionButton from '../components/ActionButton';
 import { Ringtone } from '../audio/Ringtone';
 import { WebRTCSession } from '../webrtc/WebRTCSession';
 import type { CallConnectionState } from '../webrtc/WebRTCSession';
+import apiClient from '../api/client';
 
 interface SignalMessage {
     fromUserId: string;
@@ -21,6 +25,8 @@ export default function Dashboard() {
     const [pendingCallTo, setPendingCallTo] = useState<string | null>(null);
     const [activeCallPeer, setActiveCallPeer] = useState<string | null>(null);
     const [callState, setCallState] = useState<CallConnectionState | null>(null);
+    const [isQueued, setIsQueued] = useState(false);
+    const [queueMatch, setQueueMatch] = useState<{ peerUserId: string; role: 'caller' | 'callee' } | null>(null);
 
     const socketRef = useRef<WebSocket | null>(null);
     const remoteAudioRef = useRef<HTMLAudioElement>(null);
@@ -68,7 +74,7 @@ export default function Dashboard() {
 
     useEffect(() => {
         const token = localStorage.getItem('token');
-        const wsBaseUrl = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8080';
+        const wsBaseUrl = window.__APP_CONFIG__?.WS_BASE_URL || import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8080';
         const ws = new WebSocket(`${wsBaseUrl}/ws?token=${token}`);
         socketRef.current = ws;
         let unmounted = false;
@@ -132,6 +138,12 @@ export default function Dashboard() {
                         setMessage(`${signal.fromUserId} ended the call`);
                         resetCallUi();
                         break;
+                    case 'queue-matched': {
+                        const { role } = signal.payload as { role: 'caller' | 'callee' };
+                        setIsQueued(false);
+                        setQueueMatch({ peerUserId: signal.fromUserId, role });
+                        break;
+                    }
                     default:
                         setMessage(`${signal.type} from ${signal.fromUserId}`);
                 }
@@ -206,6 +218,39 @@ export default function Dashboard() {
         if (sendSignal(userId, 'call')) setPendingCallTo(userId);
     };
 
+    const handleJoinQueue = async () => {
+        try {
+            await apiClient.post('/api/matchmaking/join');
+            setIsQueued(true);
+        } catch {
+            setMessage('Failed to join queue');
+        }
+    };
+
+    const handleLeaveQueue = async () => {
+        try {
+            await apiClient.post('/api/matchmaking/leave');
+        } catch {
+            // best-effort — the user is leaving the UI state regardless
+        } finally {
+            setIsQueued(false);
+        }
+    };
+
+    const handleAcceptMatch = () => {
+        if (!queueMatch) return;
+        if (queueMatch.role === 'caller') {
+            handleConnect(queueMatch.peerUserId);
+        } else {
+            setMessage(`Waiting for ${queueMatch.peerUserId} to call...`);
+        }
+        setQueueMatch(null);
+    };
+
+    const handleDeclineMatch = () => {
+        setQueueMatch(null);
+    };
+
     const handleAccept = () => {
         if (incomingCallFrom && sendSignal(incomingCallFrom, 'accept')) {
             setMessage(`Call with ${incomingCallFrom} accepted`);
@@ -239,59 +284,38 @@ export default function Dashboard() {
                 <SideBar />
                 <main className="flex flex-col flex-1 items-center justify-center gap-4 p-6">
                     <Connect handleConnect={handleConnect} />
+                    <Matchmaking isQueued={isQueued} onJoinQueue={handleJoinQueue} onLeaveQueue={handleLeaveQueue} />
+                    {queueMatch && (
+                        <StatusCard label="Match found">
+                            <p className="mb-3">Match found: {queueMatch.peerUserId}. Connect?</p>
+                            <div className="flex gap-3">
+                                <ActionButton onClick={handleAcceptMatch}>Connect</ActionButton>
+                                <ActionButton onClick={handleDeclineMatch} variant="secondary">Decline</ActionButton>
+                            </div>
+                        </StatusCard>
+                    )}
                     {incomingCallFrom && (
-                        <div className="w-full max-w-sm px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-200 text-sm">
-                            <span className="text-neutral-400 text-xs uppercase tracking-wide block mb-1">Incoming call</span>
+                        <StatusCard label="Incoming call">
                             <p className="mb-3">{incomingCallFrom} is calling you</p>
                             <div className="flex gap-3">
-                                <button
-                                    type="button"
-                                    onClick={handleAccept}
-                                    className="flex-1 py-2 px-4 bg-white hover:bg-neutral-200 text-black font-semibold rounded-lg transition-colors"
-                                >
-                                    Accept
-                                </button>
-                                <button
-                                    type="button"
-                                    onClick={handleReject}
-                                    className="flex-1 py-2 px-4 bg-neutral-700 hover:bg-neutral-600 text-white font-semibold rounded-lg transition-colors"
-                                >
-                                    Reject
-                                </button>
+                                <ActionButton onClick={handleAccept}>Accept</ActionButton>
+                                <ActionButton onClick={handleReject} variant="secondary">Reject</ActionButton>
                             </div>
-                        </div>
+                        </StatusCard>
                     )}
                     {pendingCallTo && (
-                        <div className="w-full max-w-sm px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-200 text-sm">
+                        <StatusCard>
                             <p className="mb-3">Calling {pendingCallTo}...</p>
-                            <button
-                                type="button"
-                                onClick={handleCancel}
-                                className="w-full py-2 px-4 bg-neutral-700 hover:bg-neutral-600 text-white font-semibold rounded-lg transition-colors"
-                            >
-                                Cancel
-                            </button>
-                        </div>
+                            <ActionButton onClick={handleCancel} variant="secondary" fullWidth>Cancel</ActionButton>
+                        </StatusCard>
                     )}
                     {activeCallPeer && (
-                        <div className="w-full max-w-sm px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-200 text-sm">
-                            <span className="text-neutral-400 text-xs uppercase tracking-wide block mb-1">In call</span>
+                        <StatusCard label="In call">
                             <p className="mb-3">In call with {activeCallPeer} — {callState}</p>
-                            <button
-                                type="button"
-                                onClick={handleHangUp}
-                                className="w-full py-2 px-4 bg-neutral-700 hover:bg-neutral-600 text-white font-semibold rounded-lg transition-colors"
-                            >
-                                Hang Up
-                            </button>
-                        </div>
+                            <ActionButton onClick={handleHangUp} variant="secondary" fullWidth>Hang Up</ActionButton>
+                        </StatusCard>
                     )}
-                    {message && (
-                        <div className="w-full max-w-sm px-4 py-3 bg-neutral-800 border border-neutral-700 rounded-lg text-neutral-200 text-sm">
-                            <span className="text-neutral-400 text-xs uppercase tracking-wide block mb-1">Status</span>
-                            {message}
-                        </div>
-                    )}
+                    {message && <StatusCard label="Status">{message}</StatusCard>}
                 </main>
             </div>
             <audio ref={remoteAudioRef} autoPlay className="hidden" />

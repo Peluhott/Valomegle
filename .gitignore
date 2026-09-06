@@ -2,3 +2,4 @@
 valomegle/logs/
 REPORT_LOG.md
 TODO.MD
+.claude/settings.local.json
