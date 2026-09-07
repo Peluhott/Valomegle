@@ -96,6 +96,11 @@ public class WebSocketHandler extends TextWebSocketHandler {
         }
     }
 
+    @Override
+    public void handleTransportError(WebSocketSession session, Throwable exception) {
+        log.error("WebSocket transport error for {}", session.getAttributes().get("userId"), exception);
+    }
+
     private static String queryParam(String query, String key) {
         if (query == null) {
             return null;
