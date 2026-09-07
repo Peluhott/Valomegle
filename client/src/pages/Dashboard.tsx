@@ -8,6 +8,7 @@ import StatusCard from '../components/StatusCard';
 import { Ringtone } from '../audio/Ringtone';
 import { WebRTCSession } from '../webrtc/WebRTCSession';
 import type { CallConnectionState } from '../webrtc/WebRTCSession';
+import { ensureMicAccess } from '../webrtc/mic';
 import apiClient from '../api/client';
 
 interface SignalMessage {
@@ -225,6 +226,12 @@ export default function Dashboard() {
     }, [activeCallPeer, callState, sendSignal, resetCallUi]);
 
     const handleJoinQueue = async (scope: 'any' | 'prefs', label: string) => {
+        const gate = await ensureMicAccess();
+        if (!gate.ok) {
+            setMessage(gate.message);
+            return;
+        }
+
         try {
             await apiClient.post('/api/matchmaking/join');
             setIsQueued(true);
