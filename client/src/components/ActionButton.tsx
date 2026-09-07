@@ -2,27 +2,32 @@ import type { ReactNode } from 'react';
 
 type ActionButtonProps = {
     onClick: () => void;
-    variant?: 'primary' | 'secondary' | 'accent' | 'outline' | 'neutral';
+    variant?: 'accent' | 'accent-clean' | 'outline' | 'neutral';
     fullWidth?: boolean;
     stretch?: boolean;
+    disabled?: boolean;
     className?: string;
     children: ReactNode;
 };
 
 const ActionButton = ({
     onClick,
-    variant = 'primary',
+    variant = 'outline',
     fullWidth = false,
     stretch = true,
+    disabled = false,
     className,
     children,
 }: ActionButtonProps) => {
+    // Maps to the design's button styles (README "Action row" + "Hover states").
+    // The only accent-filled button is `accent`; `accent-clean` is the non-dirty
+    // Save state; `outline` and `neutral` cover everything else.
     const variantClasses = {
-        primary: 'bg-neutral-900 hover:bg-neutral-800 text-white font-semibold',
-        secondary: 'bg-neutral-200 hover:bg-neutral-300 text-neutral-900 font-semibold',
-        accent: 'bg-red-600 hover:bg-red-500 text-white font-semibold',
-        outline: 'border border-neutral-900 text-neutral-900 hover:bg-neutral-900 hover:text-white font-semibold',
-        neutral: 'border border-neutral-300 text-neutral-700 hover:bg-neutral-100 font-medium',
+        accent: 'bg-accent text-white border border-accent hover:opacity-[.88]',
+        // Non-dirty Save state: keep the label legible (ink-2), not white on the fill.
+        'accent-clean': 'bg-hover text-ink-2 border border-line',
+        outline: 'border border-ink text-ink hover:bg-hover font-semibold',
+        neutral: 'border border-line text-ink-2 hover:bg-inset font-medium',
     }[variant];
 
     const widthClass = fullWidth ? 'w-full' : stretch ? 'flex-1' : '';
@@ -32,7 +37,8 @@ const ActionButton = ({
         <button
             type="button"
             onClick={onClick}
-            className={`${widthClass} ${sizingClass} ${variantClasses} rounded-lg transition-colors${className ? ` ${className}` : ''}`}
+            disabled={disabled}
+            className={`${widthClass} ${sizingClass} ${variantClasses} rounded-control transition-colors disabled:cursor-not-allowed${className ? ` ${className}` : ''}`}
         >
             {children}
         </button>

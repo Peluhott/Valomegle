@@ -1,7 +1,7 @@
 import type { CallConnectionState } from '../webrtc/WebRTCSession';
 import PlayerCard from './PlayerCard';
 import ActionButton from './ActionButton';
-import Panel from './Panel';
+import Card from './Card';
 
 type MatchedViewProps = {
     partnerId: string;
@@ -27,11 +27,15 @@ const MatchedView = ({
     const connected = callState === 'connected';
 
     return (
-        <div className="flex flex-col gap-5 w-full max-w-xl">
+        <div className="flex flex-col gap-5 w-full">
             <div className="flex items-end justify-between">
-                <div className="flex flex-col gap-1">
-                    <span className="text-xs uppercase tracking-wide text-neutral-500">Duo · voice {connected ? 'connected' : 'connecting'}</span>
-                    <h2 className="text-2xl font-bold text-neutral-900">{connected ? "You're paired up" : 'Connecting…'}</h2>
+                <div className="flex flex-col gap-1.5">
+                    <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-ink-3">
+                        Duo · voice {connected ? 'connected' : 'connecting'}
+                    </span>
+                    <h2 className="text-[30px] font-bold tracking-[-0.02em] text-ink">
+                        {connected ? "You're paired up" : 'Connecting…'}
+                    </h2>
                 </div>
             </div>
 
@@ -40,14 +44,14 @@ const MatchedView = ({
                 <PlayerCard label={partnerId} />
             </div>
 
-            <Panel className="flex items-center gap-3 p-4">
+            <div className="flex items-center gap-3 border border-line-2 rounded-card p-4 bg-subtle">
                 {isMicMuted ? (
                     // Muted state has no hover effect, unlike the `accent` variant (which adds
-                    // hover:bg-red-500) — kept as a raw button to preserve that exact look.
+                    // hover:opacity-[.88]) — kept as a raw button to preserve that exact look.
                     <button
                         type="button"
                         onClick={onToggleMuteMe}
-                        className="h-10 px-4 rounded-lg bg-red-600 text-white text-sm font-semibold transition-colors"
+                        className="h-10 px-4 rounded-control bg-accent text-white text-sm font-semibold transition-colors"
                     >
                         Unmute me
                     </button>
@@ -66,13 +70,13 @@ const MatchedView = ({
                 <ActionButton onClick={onLeave} variant="accent" stretch={false} className="h-10 px-4 text-sm">
                     Leave
                 </ActionButton>
-            </Panel>
+            </div>
 
-            <Panel label="Text backup" className="p-5 flex flex-col gap-3">
-                <div className="h-9 border border-neutral-200 rounded-lg flex items-center px-3 text-sm text-neutral-400">
+            <Card label="Text backup" padding={20}>
+                <div className="h-9 border border-line-2 rounded-control flex items-center px-3 text-[13px] text-ink-dis">
                     Chat coming soon
                 </div>
-            </Panel>
+            </Card>
         </div>
     );
 };

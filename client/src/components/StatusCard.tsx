@@ -7,8 +7,12 @@ type StatusCardProps = {
 
 const StatusCard = ({ label, children }: StatusCardProps) => {
     return (
-        <div className="w-full max-w-sm px-4 py-3 bg-white border border-neutral-200 rounded-lg text-neutral-700 text-sm">
-            {label && <span className="text-neutral-500 text-xs uppercase tracking-wide block mb-1">{label}</span>}
+        <div className="w-full max-w-sm border border-line-2 rounded-card bg-surface px-4 py-3 text-[13px] text-ink-2">
+            {label && (
+                <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-ink-3 block mb-1">
+                    {label}
+                </span>
+            )}
             {children}
         </div>
     );

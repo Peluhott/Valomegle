@@ -16,14 +16,14 @@ const RankSlider = ({ lo, hi, onChange }: RankSliderProps) => {
     const pct = (i: number) => (i / (RANKS.length - 1)) * 100;
 
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
-                <span className="text-xs uppercase tracking-wide text-neutral-500">Rank range</span>
-                <span className="text-sm font-medium text-neutral-900">{label}</span>
+                <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-ink-3">Rank range</span>
+                <span className="text-[13px] font-medium text-ink">{label}</span>
             </div>
-            <div className="relative h-1.5 rounded-full bg-neutral-100 mx-2">
+            <div className="relative h-1.5 rounded-[3px] bg-line-4 mx-2">
                 <div
-                    className="absolute top-0 bottom-0 rounded-full bg-red-500"
+                    className="absolute top-0 bottom-0 rounded-[3px] bg-accent"
                     style={{ left: `${pct(lo)}%`, width: `${pct(hi) - pct(lo)}%` }}
                 />
             </div>
@@ -35,8 +35,8 @@ const RankSlider = ({ lo, hi, onChange }: RankSliderProps) => {
                             key={name}
                             type="button"
                             onClick={() => handleClick(i)}
-                            className={`flex-1 py-1 text-[10px] font-medium transition-colors ${
-                                inRange ? 'text-neutral-900' : 'text-neutral-400 hover:text-neutral-600'
+                            className={`flex-1 py-1 font-mono text-[10px] font-medium transition-colors ${
+                                inRange ? 'text-ink' : 'text-ink-4 hover:text-ink-3'
                             }`}
                         >
                             {name}

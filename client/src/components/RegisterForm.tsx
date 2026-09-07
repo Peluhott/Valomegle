@@ -34,7 +34,7 @@ export default function RegisterForm({ handleSwitchForm }: RegisterFormProps) {
                 </div>
             )}
             <div>
-                <label htmlFor="username" className="block text-sm font-medium text-neutral-700 mb-1">
+                <label htmlFor="username" className="block text-sm font-medium text-ink-2 mb-1">
                     Username
                 </label>
                 <input
@@ -43,11 +43,11 @@ export default function RegisterForm({ handleSwitchForm }: RegisterFormProps) {
                     placeholder="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    className="w-full px-3 py-2 bg-neutral-100 border border-neutral-200 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-canvas border border-line rounded-lg text-ink placeholder-ink-4 focus:outline-none focus:border-accent"
                 />
             </div>
             <div>
-                <label htmlFor="email" className="block text-sm font-medium text-neutral-700 mb-1">
+                <label htmlFor="email" className="block text-sm font-medium text-ink-2 mb-1">
                     Email
                 </label>
                 <input
@@ -56,11 +56,11 @@ export default function RegisterForm({ handleSwitchForm }: RegisterFormProps) {
                     placeholder="email"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="w-full px-3 py-2 bg-neutral-100 border border-neutral-200 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-canvas border border-line rounded-lg text-ink placeholder-ink-4 focus:outline-none focus:border-accent"
                 />
             </div>
             <div>
-                <label htmlFor="password" className="block text-sm font-medium text-neutral-700 mb-1">
+                <label htmlFor="password" className="block text-sm font-medium text-ink-2 mb-1">
                     Password
                 </label>
                 <input
@@ -69,19 +69,19 @@ export default function RegisterForm({ handleSwitchForm }: RegisterFormProps) {
                     placeholder="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="w-full px-3 py-2 bg-neutral-100 border border-neutral-200 rounded-lg text-neutral-900 placeholder-neutral-400 focus:outline-none focus:ring-2 focus:ring-neutral-500 focus:border-transparent"
+                    className="w-full px-3 py-2 bg-canvas border border-line rounded-lg text-ink placeholder-ink-4 focus:outline-none focus:border-accent"
                 />
             </div>
             <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-2 px-4 bg-neutral-900 hover:bg-neutral-800 disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
+                className="w-full py-2 px-4 bg-ink hover:opacity-[.9] disabled:bg-neutral-300 disabled:text-neutral-500 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors"
             >
                 {loading ? 'Creating account...' : 'Create account'}
             </button>
-            <p className="text-center text-sm text-neutral-500">
+            <p className="text-center text-sm text-ink-3">
                 Already have an account?{' '}
-                <button type="button" onClick={handleSwitchForm} className="text-neutral-700 hover:text-neutral-900 underline">
+                <button type="button" onClick={handleSwitchForm} className="text-ink-2 hover:text-ink underline">
                     Sign in
                 </button>
             </p>

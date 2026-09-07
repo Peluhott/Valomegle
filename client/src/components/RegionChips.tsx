@@ -11,14 +11,14 @@ const RegionChips = ({ picked, onChange }: RegionChipsProps) => {
     };
 
     return (
-        <div className="flex flex-col gap-2">
+        <div className="flex flex-col gap-3">
             <div className="flex items-baseline justify-between">
-                <span className="text-xs uppercase tracking-wide text-neutral-500">Region</span>
+                <span className="font-mono text-[11px] tracking-[0.14em] uppercase text-ink-3">Region</span>
                 {picked.length > 0 && (
                     <button
                         type="button"
                         onClick={() => onChange([])}
-                        className="text-xs text-neutral-500 underline hover:text-neutral-700"
+                        className="text-[12px] text-ink-3 underline hover:text-ink"
                     >
                         Clear
                     </button>
@@ -32,10 +32,10 @@ const RegionChips = ({ picked, onChange }: RegionChipsProps) => {
                             key={name}
                             type="button"
                             onClick={() => toggle(name)}
-                            className={`rounded-full px-3 py-1 text-sm font-medium border transition-colors ${
+                            className={`rounded-[999px] px-3.5 py-[7px] text-[13px] font-medium border transition-colors ${
                                 on
-                                    ? 'bg-red-600 border-red-600 text-white'
-                                    : 'bg-transparent border-neutral-300 text-neutral-700 hover:border-neutral-400'
+                                    ? 'bg-accent border-accent text-white'
+                                    : 'bg-transparent border-line text-ink-2 hover:border-ink-4'
                             }`}
                         >
                             {name}
@@ -43,7 +43,7 @@ const RegionChips = ({ picked, onChange }: RegionChipsProps) => {
                     );
                 })}
             </div>
-            {picked.length === 0 && <span className="text-xs text-neutral-500">All regions</span>}
+            {picked.length === 0 && <span className="text-[12px] text-ink-3">All regions</span>}
         </div>
     );
 };

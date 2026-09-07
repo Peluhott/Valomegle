@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import Nav from '../components/Nav';
+import AppShell from '../components/AppShell';
 import IdleView from '../components/IdleView';
 import SearchingView from '../components/SearchingView';
 import MatchedView from '../components/MatchedView';
@@ -302,45 +302,40 @@ export default function Dashboard() {
         : undefined;
 
     return (
-        <div className="flex flex-col h-screen bg-neutral-100">
-            <Nav showLogout />
-
-            <div className="flex flex-1 overflow-hidden">
-                <main className="flex flex-1 gap-8 p-8 overflow-auto items-start justify-center">
-                    <div className="flex-1 flex flex-col items-center gap-4">
-                        {phase === 'idle' && (
-                            <IdleView
-                                onQueueAny={() => handleJoinQueue('any', 'Anybody')}
-                                onQueueWithPrefs={(label) => handleJoinQueue('prefs', label)}
-                            />
-                        )}
-                        {phase === 'searching' && (
-                            <SearchingView
-                                scopeLabel={queueInfo?.label || 'Anybody'}
-                                subStatus={searchingSubStatus}
-                                canWiden={isQueued && queueInfo?.scope === 'prefs'}
-                                onCancel={handleCancelSearch}
-                                onWiden={handleWiden}
-                            />
-                        )}
-                        {phase === 'matched' && activeCallPeer && (
-                            <MatchedView
-                                partnerId={activeCallPeer}
-                                callState={callState}
-                                isMicMuted={isMicMuted}
-                                onToggleMuteMe={handleToggleMuteMe}
-                                isPeerAudioMuted={isPeerAudioMuted}
-                                onToggleMuteThem={handleToggleMuteThem}
-                                onSkip={handleSkipAndRequeue}
-                                onLeave={handleLeaveMatch}
-                            />
-                        )}
-                        {message && <StatusCard label="Status">{message}</StatusCard>}
-                    </div>
-                    <MatchSidebar />
-                </main>
-            </div>
+        <>
+            <AppShell rightRail={<MatchSidebar />}>
+                <div className="flex flex-col gap-4">
+                    {phase === 'idle' && (
+                        <IdleView
+                            onQueueAny={() => handleJoinQueue('any', 'Anybody')}
+                            onQueueWithPrefs={(label) => handleJoinQueue('prefs', label)}
+                        />
+                    )}
+                    {phase === 'searching' && (
+                        <SearchingView
+                            scopeLabel={queueInfo?.label || 'Anybody'}
+                            subStatus={searchingSubStatus}
+                            canWiden={isQueued && queueInfo?.scope === 'prefs'}
+                            onCancel={handleCancelSearch}
+                            onWiden={handleWiden}
+                        />
+                    )}
+                    {phase === 'matched' && activeCallPeer && (
+                        <MatchedView
+                            partnerId={activeCallPeer}
+                            callState={callState}
+                            isMicMuted={isMicMuted}
+                            onToggleMuteMe={handleToggleMuteMe}
+                            isPeerAudioMuted={isPeerAudioMuted}
+                            onToggleMuteThem={handleToggleMuteThem}
+                            onSkip={handleSkipAndRequeue}
+                            onLeave={handleLeaveMatch}
+                        />
+                    )}
+                    {message && <StatusCard label="Status">{message}</StatusCard>}
+                </div>
+            </AppShell>
             <audio ref={remoteAudioRef} autoPlay className="hidden" />
-        </div>
+        </>
     );
 }
