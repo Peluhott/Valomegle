@@ -6,7 +6,7 @@ export type CallConnectionState =
 
 // Callbacks that the WebRTCSession will invoke to communicate with the rest of the application.
 interface WebRTCSessionCallbacks {
-  onSendSignal(targetUserId: string, type: string, payload: unknown): void;
+  onSendSignal(type: string, payload: unknown): void;
   onConnectionStateChange(state: CallConnectionState): void;
   onRemoteStream(stream: MediaStream): void;
   onError(error: Error): void;
@@ -77,7 +77,7 @@ export class WebRTCSession {
       const offer = await pc.createOffer();
       await pc.setLocalDescription(offer);
 
-      this.callbacks.onSendSignal(targetUserId, "webrtc-offer", offer);
+      this.callbacks.onSendSignal("webrtc-offer", offer);
     } catch (error) {
       this.handleNegotiationFailure(error, acquiredStream);
     }
@@ -113,7 +113,7 @@ export class WebRTCSession {
       const answer = await pc.createAnswer();
       await pc.setLocalDescription(answer);
 
-      this.callbacks.onSendSignal(fromUserId, "webrtc-answer", answer);
+      this.callbacks.onSendSignal("webrtc-answer", answer);
     } catch (error) {
       this.handleNegotiationFailure(error, acquiredStream);
     }
@@ -183,11 +183,7 @@ export class WebRTCSession {
     pc.onicecandidate = (event) => {
       if (this.pc !== pc) return;
       if (event.candidate && this.currentPeerUserId) {
-        this.callbacks.onSendSignal(
-          this.currentPeerUserId,
-          "webrtc-ice-candidate",
-          event.candidate,
-        );
+        this.callbacks.onSendSignal("webrtc-ice-candidate", event.candidate);
       }
     };
 
@@ -258,7 +254,7 @@ export class WebRTCSession {
     this.teardown();
 
     if (peerUserId) {
-      this.callbacks.onSendSignal(peerUserId, "webrtc-hangup", {});
+      this.callbacks.onSendSignal("webrtc-hangup", {});
     }
 
     this.callbacks.onError(
