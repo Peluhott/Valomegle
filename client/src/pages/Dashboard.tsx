@@ -5,7 +5,6 @@ import SearchingView from '../components/SearchingView';
 import MatchedView from '../components/MatchedView';
 import MatchSidebar from '../components/MatchSidebar';
 import StatusCard from '../components/StatusCard';
-import ActionButton from '../components/ActionButton';
 import { Ringtone } from '../audio/Ringtone';
 import { WebRTCSession } from '../webrtc/WebRTCSession';
 import type { CallConnectionState } from '../webrtc/WebRTCSession';
@@ -22,8 +21,6 @@ const CALL_TIMEOUT_MS = 30000;
 export default function Dashboard() {
     const [socketReady, setSocketReady] = useState(false);
     const [message, setMessage] = useState('');
-    const [incomingCallFrom, setIncomingCallFrom] = useState<string | null>(null);
-    const [pendingCallTo, setPendingCallTo] = useState<string | null>(null);
     const [activeCallPeer, setActiveCallPeer] = useState<string | null>(null);
     const [callState, setCallState] = useState<CallConnectionState | null>(null);
     const [isQueued, setIsQueued] = useState(false);
@@ -44,13 +41,13 @@ export default function Dashboard() {
         activeCallPeerRef.current = activeCallPeer;
     }, [activeCallPeer]);
 
-    const sendSignal = useCallback((targetUserId: string, type: string, payload: unknown = {}): boolean => {
+    const sendSignal = useCallback((type: string, payload: unknown = {}): boolean => {
         const socket = socketRef.current;
         if (socket?.readyState !== WebSocket.OPEN) {
             setMessage('Connection not ready — try again');
             return false;
         }
-        socket.send(JSON.stringify({ targetUserId, type, payload }));
+        socket.send(JSON.stringify({ type, payload }));
         return true;
     }, []);
 
@@ -80,10 +77,6 @@ export default function Dashboard() {
         setMessage(state === 'failed' ? 'Call failed — connection lost' : 'Call ended');
         resetCallUi();
     }, [resetCallUi]);
-
-    const handleConnect = useCallback((userId: string) => {
-        if (sendSignal(userId, 'call')) setPendingCallTo(userId);
-    }, [sendSignal]);
 
     useEffect(() => {
         const token = localStorage.getItem('token');
@@ -115,35 +108,9 @@ export default function Dashboard() {
             try {
                 const signal: SignalMessage = JSON.parse(event.data);
                 switch (signal.type) {
-                    case 'call':
-                        // A matchmaking match auto-accepts the resulting direct call instead of
-                        // showing the manual accept/reject card — both sides already opted in by queueing.
-                        if (pendingMatchPeer === signal.fromUserId) {
-                            sendSignal(signal.fromUserId, 'accept');
-                            setPendingMatchPeer(null);
-                        } else {
-                            setIncomingCallFrom(signal.fromUserId);
-                        }
-                        break;
-                    case 'accept':
-                        if (pendingCallTo === signal.fromUserId) {
-                            setMessage(`${signal.fromUserId} accepted your call`);
-                            setPendingCallTo(null);
-                            setActiveCallPeer(signal.fromUserId);
-                            webrtcSessionRef.current?.startCall(signal.fromUserId);
-                        }
-                        break;
-                    case 'reject':
-                        if (pendingCallTo === signal.fromUserId) {
-                            setMessage(`${signal.fromUserId} rejected your call`);
-                            setPendingCallTo(null);
-                        } else if (incomingCallFrom === signal.fromUserId) {
-                            setMessage(`${signal.fromUserId} cancelled the call`);
-                            setIncomingCallFrom(null);
-                        }
-                        break;
                     case 'webrtc-offer':
                         if (activeCallPeer) break;
+                        setPendingMatchPeer(null);
                         setActiveCallPeer(signal.fromUserId);
                         webrtcSessionRef.current?.answerCall(signal.fromUserId, signal.payload as RTCSessionDescriptionInit);
                         break;
@@ -158,13 +125,22 @@ export default function Dashboard() {
                         setMessage(`${signal.fromUserId} ended the call`);
                         resetCallUi();
                         break;
+                    case 'peer-disconnected':
+                        setMessage('Your partner disconnected');
+                        setPendingMatchPeer(null);
+                        resetCallUi();
+                        break;
                     case 'queue-matched': {
-                        // Auto-advance into the real call handshake instead of waiting for a
-                        // manual "Connect" click — both sides already opted in by queueing.
+                        // Both sides already opted in by queueing, so advance straight into the
+                        // WebRTC handshake: the caller kicks off the offer, the callee waits for it.
                         const { role } = signal.payload as { role: 'caller' | 'callee' };
                         setIsQueued(false);
-                        if (role === 'caller') handleConnect(signal.fromUserId);
-                        else setPendingMatchPeer(signal.fromUserId);
+                        if (role === 'caller') {
+                            setActiveCallPeer(signal.fromUserId);
+                            webrtcSessionRef.current?.startCall(signal.fromUserId);
+                        } else {
+                            setPendingMatchPeer(signal.fromUserId);
+                        }
                         break;
                     }
                     default:
@@ -177,7 +153,7 @@ export default function Dashboard() {
 
         socket.addEventListener('message', handleMessage);
         return () => socket.removeEventListener('message', handleMessage);
-    }, [socketReady, pendingCallTo, activeCallPeer, incomingCallFrom, pendingMatchPeer, resetCallUi, sendSignal, handleConnect]);
+    }, [socketReady, activeCallPeer, resetCallUi]);
 
     useEffect(() => {
         if (!socketReady) return;
@@ -201,44 +177,21 @@ export default function Dashboard() {
         };
     }, [socketReady, sendSignal, handleConnectionStateChange]);
 
-    // Ring while an outgoing call is ringing OR an incoming call is waiting to be
-    // answered. One effect (not two) so that when both are briefly true at once —
-    // you are calling someone and simultaneously get called — a single owner
-    // controls start/stop instead of one effect's cleanup silencing the other.
+    // Ring while waiting for a matched peer to connect (the callee side, after
+    // queue-matched and before their webrtc-offer arrives).
     useEffect(() => {
         const ringtone = ringtoneRef.current;
-        if ((!pendingCallTo && !incomingCallFrom) || !ringtone) return;
+        if (!pendingMatchPeer || !ringtone) return;
         ringtone.start();
         return () => ringtone.stop();
-    }, [pendingCallTo, incomingCallFrom]);
+    }, [pendingMatchPeer]);
 
     useEffect(() => {
         return () => ringtoneRef.current?.stop();
     }, []);
 
-    // Give up on an unanswered outgoing call after CALL_TIMEOUT_MS.
-    useEffect(() => {
-        if (!pendingCallTo) return;
-        const timeoutId = window.setTimeout(() => {
-            sendSignal(pendingCallTo, 'reject');
-            setMessage(`No answer from ${pendingCallTo}`);
-            setPendingCallTo(null);
-        }, CALL_TIMEOUT_MS);
-        return () => clearTimeout(timeoutId);
-    }, [pendingCallTo, sendSignal]);
-
-    // Drop an unanswered incoming call after CALL_TIMEOUT_MS; the caller times
-    // out on their own side, so no signal is sent here.
-    useEffect(() => {
-        if (!incomingCallFrom) return;
-        const timeoutId = window.setTimeout(() => {
-            setIncomingCallFrom(null);
-        }, CALL_TIMEOUT_MS);
-        return () => clearTimeout(timeoutId);
-    }, [incomingCallFrom]);
-
-    // Give up waiting for the matched peer's call after CALL_TIMEOUT_MS, mirroring
-    // the direct-call timeouts above so a stalled match can't hang the UI forever.
+    // Give up waiting for the matched peer's call after CALL_TIMEOUT_MS so a
+    // stalled match can't hang the UI forever.
     useEffect(() => {
         if (!pendingMatchPeer) return;
         const timeoutId = window.setTimeout(() => {
@@ -279,31 +232,10 @@ export default function Dashboard() {
     const handleCancelSearch = () => {
         if (isQueued) handleLeaveQueue();
         if (pendingMatchPeer) setPendingMatchPeer(null);
-        if (pendingCallTo) handleCancel();
-    };
-
-    const handleAccept = () => {
-        if (incomingCallFrom && sendSignal(incomingCallFrom, 'accept')) {
-            setMessage(`Call with ${incomingCallFrom} accepted`);
-            setIncomingCallFrom(null);
-        }
-    };
-
-    const handleReject = () => {
-        if (!incomingCallFrom) return;
-        sendSignal(incomingCallFrom, 'reject');
-        setIncomingCallFrom(null);
-    };
-
-    const handleCancel = () => {
-        if (!pendingCallTo) return;
-        sendSignal(pendingCallTo, 'reject');
-        setMessage(`Call to ${pendingCallTo} cancelled`);
-        setPendingCallTo(null);
     };
 
     const handleHangUp = () => {
-        if (activeCallPeer) sendSignal(activeCallPeer, 'webrtc-hangup');
+        if (activeCallPeer) sendSignal('webrtc-hangup');
         resetCallUi();
     };
 
@@ -331,15 +263,13 @@ export default function Dashboard() {
 
     const phase: 'idle' | 'searching' | 'matched' = activeCallPeer
         ? 'matched'
-        : (isQueued || pendingMatchPeer || pendingCallTo)
+        : (isQueued || pendingMatchPeer)
             ? 'searching'
             : 'idle';
 
     const searchingSubStatus = pendingMatchPeer
         ? 'Match found — waiting to connect...'
-        : pendingCallTo
-            ? `Calling ${pendingCallTo}...`
-            : undefined;
+        : undefined;
 
     return (
         <div className="flex flex-col h-screen bg-neutral-100">
@@ -374,15 +304,6 @@ export default function Dashboard() {
                                 onSkip={handleSkipAndRequeue}
                                 onLeave={handleLeaveMatch}
                             />
-                        )}
-                        {incomingCallFrom && (
-                            <StatusCard label="Incoming call">
-                                <p className="mb-3">{incomingCallFrom} is calling you</p>
-                                <div className="flex gap-3">
-                                    <ActionButton onClick={handleAccept}>Accept</ActionButton>
-                                    <ActionButton onClick={handleReject} variant="secondary">Reject</ActionButton>
-                                </div>
-                            </StatusCard>
                         )}
                         {message && <StatusCard label="Status">{message}</StatusCard>}
                     </div>
