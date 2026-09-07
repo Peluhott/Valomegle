@@ -1,13 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 
-export type MicLevelStatus = 'requesting' | 'granted' | 'denied' | 'error';
+export type MicLevelStatus = 'idle' | 'requesting' | 'granted' | 'denied' | 'error';
 
-export function useMicLevel() {
+export function useMicLevel(enabled: boolean) {
     const [level, setLevel] = useState(0);
     const [status, setStatus] = useState<MicLevelStatus>('requesting');
     const frameRef = useRef<number | null>(null);
 
     useEffect(() => {
+        // When disabled, run no capture; the cleanup from the previous enabled run
+        // has already released the mic. The returned values are derived below.
+        if (!enabled) return;
+
         let cancelled = false;
         let stream: MediaStream | null = null;
         let audioContext: AudioContext | null = null;
@@ -52,7 +56,8 @@ export function useMicLevel() {
             stream?.getTracks().forEach((track) => track.stop());
             audioContext?.close();
         };
-    }, []);
+    }, [enabled]);
 
+    if (!enabled) return { level: 0, status: 'idle' as MicLevelStatus };
     return { level, status };
 }
