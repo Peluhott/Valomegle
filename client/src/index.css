@@ -1,7 +1,34 @@
 @import "tailwindcss";
 
+@theme {
+  --font-sans: "Archivo", ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, monospace;
+
+  --color-canvas: #f4f4f2;
+  --color-surface: #ffffff;
+  --color-ink: #1b1b1a;
+  --color-ink-2: #55554f;
+  --color-ink-3: #8a8a85;
+  --color-ink-4: #a8a8a2;
+  --color-ink-dis: #b8b8b2;
+  --color-line: #d5d5cf;
+  --color-line-2: #e0e0da;
+  --color-line-3: #e6e6e1;
+  --color-line-4: #ecece7;
+  --color-hover: #f0f0eb;
+  --color-inset: #f7f7f4;
+  --color-subtle: #fafaf8;
+  --color-accent: #FF4655;
+
+  --radius-tag: 3px;
+  --radius-control: 6px;
+  --radius-tile: 8px;
+  --radius-card: 10px;
+}
+
 body {
-  background-color: #f4f4f4;
-  color: #171717;
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
   min-height: 100vh;
 }
