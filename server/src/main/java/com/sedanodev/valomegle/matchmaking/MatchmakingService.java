@@ -81,15 +81,22 @@ public class MatchmakingService {
         matchRegistry.pair(callerId, calleeId);
     }
 
-    // Dequeue the dropped user and tell their partner the peer is gone.
+    // Tell the dropped user's partner the peer is gone, then dequeue them. The partner
+    // notify + unpair run first so a Redis failure in leave() can't skip them.
     @EventListener
     public void onUserDisconnected(UserDisconnectedEvent event) {
         String userId = event.userId();
-        leave(userId);
+
         String partnerId = matchRegistry.partnerOf(userId);
         if (partnerId != null) {
-            messenger.send(partnerId, userId, "peer-disconnected", Map.of());
             matchRegistry.unpair(userId);
+            messenger.send(partnerId, userId, "peer-disconnected", Map.of());
+        }
+
+        try {
+            leave(userId);
+        } catch (Exception e) {
+            log.warn("Failed to dequeue disconnected user {}: {}", userId, e.getMessage());
         }
     }
 }

@@ -1,5 +1,7 @@
 package com.sedanodev.valomegle.websocket;
 
+import java.util.Map;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
@@ -78,6 +80,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
         String partnerId = matchRegistry.partnerOf(fromUserId);
         if (partnerId == null) {
             log.debug("Dropped frame from {}: no active match", fromUserId);
+            messenger.send(fromUserId, "server", "error", Map.of("reason", "no-active-match"));
             return;
         }
 

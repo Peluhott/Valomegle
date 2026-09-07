@@ -130,6 +130,16 @@ export default function Dashboard() {
                         setPendingMatchPeer(null);
                         resetCallUi();
                         break;
+                    case 'error':
+                        // Only react if a call is actually in progress — a stray frame
+                        // (e.g. trickled ICE arriving after the server already unpaired
+                        // on a normal hang-up) would otherwise show a false error.
+                        console.error('server error frame:', signal.payload);
+                        if (!activeCallPeer && !pendingMatchPeer) break;
+                        setMessage('Lost connection to your match — try again');
+                        setPendingMatchPeer(null);
+                        resetCallUi();
+                        break;
                     case 'queue-matched': {
                         // Both sides already opted in by queueing, so advance straight into the
                         // WebRTC handshake: the caller kicks off the offer, the callee waits for it.
@@ -153,7 +163,7 @@ export default function Dashboard() {
 
         socket.addEventListener('message', handleMessage);
         return () => socket.removeEventListener('message', handleMessage);
-    }, [socketReady, activeCallPeer, resetCallUi]);
+    }, [socketReady, activeCallPeer, pendingMatchPeer, resetCallUi]);
 
     useEffect(() => {
         if (!socketReady) return;
@@ -200,6 +210,19 @@ export default function Dashboard() {
         }, CALL_TIMEOUT_MS);
         return () => clearTimeout(timeoutId);
     }, [pendingMatchPeer]);
+
+    // Tear down a call that never reaches "connected" (dropped offer, silent ICE
+    // stall, offline peer) so it can't hang the UI. handleConnectionStateChange
+    // covers the case where the pc actually reports failed/disconnected.
+    useEffect(() => {
+        if (!activeCallPeer || callState === 'connected') return;
+        const timeoutId = window.setTimeout(() => {
+            setMessage('Call failed to connect — try again');
+            if (activeCallPeer) sendSignal('webrtc-hangup');
+            resetCallUi();
+        }, CALL_TIMEOUT_MS);
+        return () => clearTimeout(timeoutId);
+    }, [activeCallPeer, callState, sendSignal, resetCallUi]);
 
     const handleJoinQueue = async (scope: 'any' | 'prefs', label: string) => {
         try {
