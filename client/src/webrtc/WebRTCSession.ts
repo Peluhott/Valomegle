@@ -220,6 +220,12 @@ export class WebRTCSession {
   }
 
   private async acquireLocalStream(): Promise<MediaStream> {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      throw new Error(
+        "Microphone access needs a secure context — open the app at http://localhost, not an IP address.",
+      );
+    }
+
     try {
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       this.localStream = stream;
@@ -248,6 +254,8 @@ export class WebRTCSession {
     error: unknown,
     acquiredStream: MediaStream | null,
   ): void {
+    console.error("WebRTC negotiation failed:", error);
+
     const peerUserId = this.currentPeerUserId;
 
     acquiredStream?.getTracks().forEach((track) => track.stop());
@@ -257,10 +265,12 @@ export class WebRTCSession {
       this.callbacks.onSendSignal("webrtc-hangup", {});
     }
 
+    // onConnectionStateChange resets the call UI and sets a generic message;
+    // onError runs after so the specific reason (mic denied, no device, …) wins.
+    this.callbacks.onConnectionStateChange("failed");
     this.callbacks.onError(
       error instanceof Error ? error : new Error("WebRTC negotiation failed"),
     );
-    this.callbacks.onConnectionStateChange("failed");
   }
 
   /** Full, consistent teardown of call state. Does not fire any callbacks. */
