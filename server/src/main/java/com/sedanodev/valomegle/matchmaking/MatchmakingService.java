@@ -2,9 +2,12 @@ package com.sedanodev.valomegle.matchmaking;
 
 import java.util.Map;
 
+import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import com.sedanodev.valomegle.match.MatchRegistry;
+import com.sedanodev.valomegle.match.UserDisconnectedEvent;
 import com.sedanodev.valomegle.websocket.WebSocketMessenger;
 
 import lombok.extern.slf4j.Slf4j;
@@ -17,10 +20,12 @@ public class MatchmakingService {
 
     private final StringRedisTemplate redisTemplate;
     private final WebSocketMessenger messenger;
+    private final MatchRegistry matchRegistry;
 
-    public MatchmakingService(StringRedisTemplate redisTemplate, WebSocketMessenger messenger) {
+    public MatchmakingService(StringRedisTemplate redisTemplate, WebSocketMessenger messenger, MatchRegistry matchRegistry) {
         this.redisTemplate = redisTemplate;
         this.messenger = messenger;
+        this.matchRegistry = matchRegistry;
     }
 
     public void join(String userId) {
@@ -40,14 +45,14 @@ public class MatchmakingService {
     // queued simultaneously, only the earliest two (still-reachable) ones match per join event.
     // Fine for the 2-user manual test this targets, not a real concurrent-load design.
     //
-    // There's no dequeue-on-disconnect (wiring it from WebSocketHandler would create a
-    // matchmaking<->websocket package cycle), so a closed tab/refresh can leave a dead entry
-    // sitting in the queue indefinitely. We don't detect that until we try to deliver to it -
-    // messenger.send()'s return value IS the liveness check, there's no separate way to peek at
-    // it - so the caller slot is retried with fresh candidates (discarding dead ones) until we
-    // find one we can actually reach, or the queue runs dry. The callee is only ever notified
-    // once the caller is confirmed reachable, so a stale caller entry can no longer produce a
-    // "matched with a peer who was never there" notification on the callee's side.
+    // onUserDisconnected() dequeues on a clean socket close, but an unclean drop (killed process,
+    // network loss before the close frame) can still leave a dead entry in the queue. We don't
+    // detect that until we try to deliver to it - messenger.send()'s return value IS the liveness
+    // check, there's no separate way to peek at it - so the caller slot is retried with fresh
+    // candidates (discarding dead ones) until we find one we can actually reach, or the queue runs
+    // dry. The callee is only ever notified once the caller is confirmed reachable, so a stale
+    // caller entry can no longer produce a "matched with a peer who was never there" notification
+    // on the callee's side.
     private void tryMatch() {
         String callerId = redisTemplate.opsForList().leftPop(QUEUE_KEY);
         if (callerId == null) {
@@ -73,5 +78,18 @@ public class MatchmakingService {
 
         messenger.send(calleeId, callerId, "queue-matched", Map.of("role", "callee"));
         log.info("Matched users {} (caller) and {} (callee)", callerId, calleeId);
+        matchRegistry.pair(callerId, calleeId);
+    }
+
+    // Dequeue the dropped user and tell their partner the peer is gone.
+    @EventListener
+    public void onUserDisconnected(UserDisconnectedEvent event) {
+        String userId = event.userId();
+        leave(userId);
+        String partnerId = matchRegistry.partnerOf(userId);
+        if (partnerId != null) {
+            messenger.send(partnerId, userId, "peer-disconnected", Map.of());
+            matchRegistry.unpair(userId);
+        }
     }
 }

@@ -3,12 +3,15 @@ package com.sedanodev.valomegle.websocket;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
+import com.sedanodev.valomegle.match.MatchRegistry;
+import com.sedanodev.valomegle.match.UserDisconnectedEvent;
 import com.sedanodev.valomegle.security.JwtService;
 
 @Slf4j
@@ -19,12 +22,16 @@ public class WebSocketHandler extends TextWebSocketHandler {
     private final JwtService jwtUtil;
     private final WebSocketMessenger messenger;
     private final ObjectMapper objectMapper;
+    private final MatchRegistry matchRegistry;
+    private final ApplicationEventPublisher eventPublisher;
 
-    public WebSocketHandler(WebSocketSessionManager sessionManager, JwtService jwtUtil, WebSocketMessenger messenger, ObjectMapper objectMapper) {
+    public WebSocketHandler(WebSocketSessionManager sessionManager, JwtService jwtUtil, WebSocketMessenger messenger, ObjectMapper objectMapper, MatchRegistry matchRegistry, ApplicationEventPublisher eventPublisher) {
         this.sessionManager = sessionManager;
         this.jwtUtil = jwtUtil;
         this.messenger = messenger;
         this.objectMapper = objectMapper;
+        this.matchRegistry = matchRegistry;
+        this.eventPublisher = eventPublisher;
     }
 
     @Override
@@ -60,16 +67,24 @@ public class WebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        if (!node.hasNonNull("targetUserId") || !node.hasNonNull("type") || !node.hasNonNull("payload")) {
+        if (!node.hasNonNull("type") || !node.hasNonNull("payload")) {
             log.debug("Dropped frame from {}: missing required field", fromUserId);
             return;
         }
 
-        String targetUserId = node.get("targetUserId").asText();
         String type = node.get("type").asText();
         JsonNode signalPayload = node.get("payload");
 
-        messenger.send(targetUserId, fromUserId, type, signalPayload);
+        String partnerId = matchRegistry.partnerOf(fromUserId);
+        if (partnerId == null) {
+            log.debug("Dropped frame from {}: no active match", fromUserId);
+            return;
+        }
+
+        messenger.send(partnerId, fromUserId, type, signalPayload);
+        if ("webrtc-hangup".equals(type)) {
+            matchRegistry.unpair(fromUserId);
+        }
     }
 
     @Override
@@ -77,6 +92,7 @@ public class WebSocketHandler extends TextWebSocketHandler {
         String userId = (String) session.getAttributes().get("userId"); // just retrieve it
         if (userId != null) {
             sessionManager.removeSession(userId);
+            eventPublisher.publishEvent(new UserDisconnectedEvent(userId));
         }
     }
 
