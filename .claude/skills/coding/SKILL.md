@@ -1,6 +1,6 @@
 ---
 name: coding
-description: Coding conventions to follow whenever writing or editing code in the Valomegle codebase (Java/Spring Boot backend, React/TypeScript frontend) — proper error handling, consistent naming, formatting, and documenting only when necessary. Use this whenever implementing a feature, fixing a bug, or making any non-trivial code change in either `valomegle/` or `client/valomegle/`. Runs on whatever model is already coding — no special model or subagent needed.
+description: Coding conventions to follow whenever writing or editing code in the Valomegle codebase (Java/Spring Boot backend, React/TypeScript frontend) — proper error handling, consistent naming, formatting, and documenting only when necessary. Use this whenever implementing a feature, fixing a bug, or making any non-trivial code change in either `server/` or `client/`. Runs on whatever model is already coding — no special model or subagent needed.
 ---
 
 # Coding
@@ -23,7 +23,7 @@ whatever's already writing the code.
   401 handling take over, rather than inventing a parallel error path. Follow
   that precedent: prefer the framework's existing error-handling mechanism
   over a custom one. Log failures that matter (backend logs to
-  `valomegle/logs/valomegle.log`, not stdout).
+  `server/logs/valomegle.log`, not stdout).
 - **Frontend (React/TS):** handle axios rejections explicitly — surface
   failures into component state the UI actually reads, don't let a rejected
   promise disappear. Don't wrap every call in try/catch reflexively; only
@@ -47,7 +47,7 @@ whatever's already writing the code.
 
 - Match the surrounding code's existing style rather than introducing a new
   one, even in files with no enforced formatter.
-- **Frontend:** run `npm run lint` (from `client/valomegle/`) before
+- **Frontend:** run `npm run lint` (from `client/`) before
   considering a change done — ESLint is already configured
   (`eslint.config.js`).
 - **Backend:** no formatter/checkstyle is configured in `pom.xml` currently,
@@ -66,10 +66,9 @@ whatever's already writing the code.
 
 ## Before considering it done
 
-Once a coding change is complete, always run the `review` skill on the
-resulting diff, then the `report` skill to log it, before calling the task
-finished. Neither is situational — both apply to every coding task in this
-repo, not just ones planned through `architecture`. Don't skip `review`
-because the change felt small or obviously correct; that's exactly the
-judgment it exists to double-check. Don't skip `report` either — it's how
-the user reviews what happened without re-reading the whole conversation.
+Verify the change compiles/builds/lints (and passes any existing tests)
+before calling the task finished. Don't start a dev server or use browser
+automation to test it — the user is hands-on in development now and tests
+changes themselves. The `review` and `report` skills exist for when the
+user asks for them, but running them after every task is no longer
+automatic.

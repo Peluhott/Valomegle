@@ -1,0 +1,27 @@
+services:
+  redis:
+    image: redis:7-alpine
+    ports: ["6379:6379"]
+  backend:
+    build: ./server
+    ports: ["8080:8080"]
+    depends_on: [redis]
+    environment:
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
+      REDIS_HOST: ${REDIS_HOST:-redis}
+      REDIS_PORT: ${REDIS_PORT:-6379}
+  frontend:
+    build:
+      context: ./client
+    # API_BASE_URL/WS_BASE_URL are read at container start (written into
+    # config.js), not baked into the image, so the same built/pushed image
+    # can point at a different backend just by changing these and restarting.
+    environment:
+      API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
+      WS_BASE_URL: ${WS_BASE_URL:-ws://localhost:8080}
+    ports: ["5173:80"]
+    depends_on: [backend]
