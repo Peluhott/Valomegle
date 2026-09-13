@@ -35,6 +35,10 @@ public class UserService {
     }
 
     public UserResponse createUser(CreateUser request) {
+        if (request.getPassword() == null || request.getPassword().length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
+        }
+
         User newUser = new User();
         newUser.setUsername(request.getUsername());
         newUser.setEmail(request.getEmail());
