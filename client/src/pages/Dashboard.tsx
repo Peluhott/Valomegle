@@ -10,6 +10,7 @@ import { WebRTCSession } from '../webrtc/WebRTCSession';
 import type { CallConnectionState } from '../webrtc/WebRTCSession';
 import { ensureMicAccess } from '../webrtc/mic';
 import apiClient from '../api/client';
+import type { QueuePreferences } from '../constants';
 
 interface SignalMessage {
     fromUserId: string;
@@ -225,7 +226,7 @@ export default function Dashboard() {
         return () => clearTimeout(timeoutId);
     }, [activeCallPeer, callState, sendSignal, resetCallUi]);
 
-    const handleJoinQueue = async (scope: 'any' | 'prefs', label: string) => {
+    const handleJoinQueue = async (scope: 'any' | 'prefs', label: string, prefs?: QueuePreferences) => {
         const gate = await ensureMicAccess();
         if (!gate.ok) {
             setMessage(gate.message);
@@ -233,7 +234,7 @@ export default function Dashboard() {
         }
 
         try {
-            await apiClient.post('/api/matchmaking/join');
+            await apiClient.post('/api/matchmaking/join', prefs);
             setIsQueued(true);
             setQueueInfo({ scope, label });
         } catch {
@@ -252,11 +253,10 @@ export default function Dashboard() {
         }
     };
 
-    // Preferences aren't sent to the backend today — the queue is a plain FIFO
-    // with no rank/region filtering — so "widen" only corrects the displayed
-    // label; the user was already matching against anybody.
+    // Rejoins the queue with no preferences, replacing the old preference-scoped
+    // ticket — join() de-dupes by username, so no explicit leave() is needed first.
     const handleWiden = () => {
-        setQueueInfo({ scope: 'any', label: 'Anybody' });
+        void handleJoinQueue('any', 'Anybody');
     };
 
     const handleCancelSearch = () => {
@@ -308,7 +308,7 @@ export default function Dashboard() {
                     {phase === 'idle' && (
                         <IdleView
                             onQueueAny={() => handleJoinQueue('any', 'Anybody')}
-                            onQueueWithPrefs={(label) => handleJoinQueue('prefs', label)}
+                            onQueueWithPrefs={(prefs, label) => handleJoinQueue('prefs', label, prefs)}
                         />
                     )}
                     {phase === 'searching' && (

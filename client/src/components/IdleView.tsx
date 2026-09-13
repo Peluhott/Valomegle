@@ -3,11 +3,11 @@ import RankSlider from './RankSlider';
 import RegionChips from './RegionChips';
 import ActionButton from './ActionButton';
 import Card from './Card';
-import { REGIONS, rankRangeLabel } from '../constants';
+import { REGIONS, RANKS, rankRangeLabel, type QueuePreferences } from '../constants';
 
 type IdleViewProps = {
     onQueueAny: () => void;
-    onQueueWithPrefs: (label: string) => void;
+    onQueueWithPrefs: (prefs: QueuePreferences, label: string) => void;
 };
 
 const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
@@ -23,7 +23,7 @@ const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
     const queueWithPrefs = () => {
         const rankLabel = rankRangeLabel(lo, hi);
         const regionLabel = picked.length ? picked.join(', ') : 'All regions';
-        onQueueWithPrefs(`${rankLabel} • ${regionLabel}`);
+        onQueueWithPrefs({ rankLo: RANKS[lo], rankHi: RANKS[hi], regions: picked }, `${rankLabel} • ${regionLabel}`);
     };
 
     return (

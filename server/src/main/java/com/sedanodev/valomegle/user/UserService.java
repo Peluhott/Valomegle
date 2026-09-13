@@ -19,9 +19,8 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class UserService {
 
-    private static final List<String> VALID_RANKS = List.of(
-            "Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal", "Radiant");
-    private static final List<String> VALID_REGIONS = List.of("West", "Central", "East");
+    private static final List<String> VALID_RANKS = RankOrder.ORDER;
+    public static final List<String> VALID_REGIONS = List.of("West", "Central", "East");
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
