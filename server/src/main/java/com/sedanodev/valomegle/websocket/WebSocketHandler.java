@@ -92,9 +92,8 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionClosed(WebSocketSession session, CloseStatus status) throws Exception {
-        String userId = (String) session.getAttributes().get("userId"); // just retrieve it
-        if (userId != null) {
-            sessionManager.removeSession(userId);
+        String userId = (String) session.getAttributes().get("userId");
+        if (userId != null && sessionManager.removeSession(userId, session)) {
             eventPublisher.publishEvent(new UserDisconnectedEvent(userId));
         }
     }
