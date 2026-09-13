@@ -113,6 +113,16 @@ public class FriendService {
         log.info("Friendship {} removed by {}", friendshipId, username);
     }
 
+    // Used by the call feature to gate direct call invites on an accepted friendship.
+    public boolean areFriends(String usernameA, String usernameB) {
+        User userA = userRepository.findByUsername(usernameA)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + usernameA));
+        User userB = userRepository.findByUsername(usernameB)
+                .orElseThrow(() -> new UserNotFoundException("User not found: " + usernameB));
+
+        return friendRepository.existsAcceptedBetween(userA, userB);
+    }
+
     private User resolveUser(String username) {
         return userRepository.findByUsername(username)
                 .orElseThrow(() -> new UserNotFoundException("User not found: " + username));

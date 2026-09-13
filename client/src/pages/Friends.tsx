@@ -1,10 +1,13 @@
 import ActionButton from '../components/ActionButton';
 import AppShell from '../components/AppShell';
 import Card from '../components/Card';
+import StatusCard from '../components/StatusCard';
 import { useFriends } from '../hooks/useFriends';
+import { useCall } from '../context/CallContext';
 
 export default function Friends() {
     const { friends, incoming, outgoing, loading, accept, decline, unfriend } = useFriends();
+    const { phase, message, callFriend } = useCall();
 
     const rightRail = (
         <Card label="About this page" padding={20}>
@@ -40,19 +43,35 @@ export default function Friends() {
                                     className="flex items-center justify-between border border-line-3 rounded-tile px-4 py-3"
                                 >
                                     <span className="text-[14px] font-medium text-ink">{friend.username}</span>
-                                    <ActionButton
-                                        onClick={() => unfriend(friend.id)}
-                                        variant="neutral"
-                                        stretch={false}
-                                        className="h-8 px-4 text-[13px]"
+                                    <div
+                                        className="flex gap-2"
+                                        title={phase !== 'idle' ? "You're already in a call — finish it first" : undefined}
                                     >
-                                        Unfriend
-                                    </ActionButton>
+                                        <ActionButton
+                                            onClick={() => callFriend(friend.username)}
+                                            variant="accent"
+                                            stretch={false}
+                                            disabled={phase !== 'idle'}
+                                            className="h-8 px-4 text-[13px]"
+                                        >
+                                            Call
+                                        </ActionButton>
+                                        <ActionButton
+                                            onClick={() => unfriend(friend.id)}
+                                            variant="neutral"
+                                            stretch={false}
+                                            className="h-8 px-4 text-[13px]"
+                                        >
+                                            Unfriend
+                                        </ActionButton>
+                                    </div>
                                 </div>
                             ))}
                         </div>
                     )}
                 </Card>
+
+                {message && <StatusCard label="Status">{message}</StatusCard>}
 
                 <Card label="Requests" padding={24}>
                     {incoming.length === 0 ? (

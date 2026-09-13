@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sedanodev.valomegle.call.CallInviteRegistry;
 import com.sedanodev.valomegle.connection.ConnectionService;
 import com.sedanodev.valomegle.match.MatchRegistry;
 import com.sedanodev.valomegle.match.UserDisconnectedEvent;
@@ -36,20 +37,29 @@ public class MatchmakingService {
     private final ConnectionService connectionService;
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
+    private final CallInviteRegistry callInviteRegistry;
 
     public MatchmakingService(StringRedisTemplate redisTemplate, WebSocketMessenger messenger,
             MatchRegistry matchRegistry, ConnectionService connectionService, UserRepository userRepository,
-            ObjectMapper objectMapper) {
+            ObjectMapper objectMapper, CallInviteRegistry callInviteRegistry) {
         this.redisTemplate = redisTemplate;
         this.messenger = messenger;
         this.matchRegistry = matchRegistry;
         this.connectionService = connectionService;
         this.userRepository = userRepository;
         this.objectMapper = objectMapper;
+        this.callInviteRegistry = callInviteRegistry;
     }
 
     public void join(String userId, JoinQueueRequest prefs) {
         validate(prefs);
+
+        if (matchRegistry.partnerOf(userId) != null) {
+            throw new IllegalArgumentException("You are already in a call");
+        }
+        if (callInviteRegistry.hasPendingInvite(userId)) {
+            throw new IllegalArgumentException("You already have a pending call invite");
+        }
 
         User user = userRepository.findByUsername(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
@@ -74,6 +84,13 @@ public class MatchmakingService {
         redisTemplate.opsForList().remove(QUEUE_KEY, 0, userId);
         removeTicket(userId);
         log.info("User left matchmaking queue: {}", userId);
+    }
+
+    // Used by the call feature to keep a queued user from also placing/receiving a
+    // direct call invite. Backed by the ticket hash rather than scanning the queue
+    // list, since join()/leave() already keep the two in sync with each other.
+    public boolean isInQueue(String userId) {
+        return Boolean.TRUE.equals(redisTemplate.opsForHash().hasKey(TICKETS_KEY, userId));
     }
 
     // rankLo/rankHi must be either both present (a valid, ordered range) or both
