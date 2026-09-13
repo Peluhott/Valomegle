@@ -2,8 +2,9 @@ import { useState } from 'react';
 import RankSlider from './RankSlider';
 import RegionChips from './RegionChips';
 import ActionButton from './ActionButton';
-import Card from './Card';
 import { RANKS, rankRangeLabel, type QueuePreferences } from '../constants';
+
+const optionCard = 'border-[1.5px] border-accent rounded-card bg-[#fffafa] p-6 flex flex-col gap-3.5';
 
 type IdleViewProps = {
     onQueueAny: () => void;
@@ -29,7 +30,7 @@ const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
             </div>
 
             <div className="flex flex-col gap-4">
-                <div className="border-[1.5px] border-accent rounded-card bg-[#fffafa] p-6 flex flex-col gap-3.5">
+                <div className={optionCard}>
                     <div className="flex items-baseline justify-between">
                         <h3 className="text-[19px] font-semibold text-ink">Match with anybody</h3>
                         <span className="font-mono text-[11px] text-ink-3">~15s wait</span>
@@ -42,7 +43,7 @@ const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
                     </ActionButton>
                 </div>
 
-                <Card>
+                <div className={optionCard}>
                     <div className="flex items-baseline justify-between">
                         <h3 className="text-[19px] font-semibold text-ink">Match by preferences</h3>
                     </div>
@@ -54,13 +55,11 @@ const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
                         <RankSlider lo={lo} hi={hi} onChange={(l, h) => { setLo(l); setHi(h); }} />
                         <RegionChips picked={picked} onChange={setPicked} />
 
-                        <div className="flex items-center gap-4">
-                            <ActionButton onClick={queueWithPrefs} variant="outline" stretch={false} className="h-11 px-5">
-                                Queue with preferences
-                            </ActionButton>
-                        </div>
+                        <ActionButton onClick={queueWithPrefs} variant="accent" fullWidth className="h-11 mt-1">
+                            Queue with preferences
+                        </ActionButton>
                     </div>
-                </Card>
+                </div>
             </div>
         </div>
     );
