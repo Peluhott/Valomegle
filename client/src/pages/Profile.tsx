@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import axios from 'axios';
 import apiClient from '../api/client';
 import ActionButton from '../components/ActionButton';
 import AppShell from '../components/AppShell';
@@ -18,8 +19,6 @@ type ProfileForm = {
 // Empty text fields are '', unset selects are the literal 'Not set' option value.
 const EMPTY_FORM: ProfileForm = { firstName: '', lastName: '', rank: 'Not set', region: 'Not set' };
 
-const disabledInputClass = `${inputClass} opacity-60 cursor-not-allowed`;
-
 export default function Profile() {
     const { user, loading } = useCurrentUser();
     const [username, setUsername] = useState('');
@@ -29,6 +28,13 @@ export default function Profile() {
     const [isSaving, setIsSaving] = useState(false);
     const [justSaved, setJustSaved] = useState(false);
     const [saveError, setSaveError] = useState('');
+
+    const [currentPassword, setCurrentPassword] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [confirmPassword, setConfirmPassword] = useState('');
+    const [isChangingPassword, setIsChangingPassword] = useState(false);
+    const [passwordSuccess, setPasswordSuccess] = useState(false);
+    const [passwordError, setPasswordError] = useState('');
 
     // Seed the working copy and the last-saved snapshot from the fetched profile.
     // `useCurrentUser` sets `user` once, so this runs a single time per load; done
@@ -76,6 +82,36 @@ export default function Profile() {
     const handleDiscard = () => {
         setForm(saved);
         setJustSaved(false);
+    };
+
+    const handleChangePassword = async () => {
+        setPasswordError('');
+        setPasswordSuccess(false);
+
+        if (newPassword.length < 8) {
+            setPasswordError('New password must be at least 8 characters.');
+            return;
+        }
+        if (newPassword !== confirmPassword) {
+            setPasswordError('New password and confirmation do not match.');
+            return;
+        }
+
+        setIsChangingPassword(true);
+        try {
+            await apiClient.put('/api/users/me/password', { currentPassword, newPassword });
+            setCurrentPassword('');
+            setNewPassword('');
+            setConfirmPassword('');
+            setPasswordSuccess(true);
+        } catch (err) {
+            const message = axios.isAxiosError(err) && typeof err.response?.data === 'string'
+                ? err.response.data
+                : 'Could not update password. Try again.';
+            setPasswordError(message);
+        } finally {
+            setIsChangingPassword(false);
+        }
     };
 
     const statusLine = dirty ? 'Unsaved changes' : justSaved ? 'Saved just now' : 'Up to date';
@@ -234,46 +270,61 @@ export default function Profile() {
                     </div>
                 </Card>
 
-                {/* Password — laid out per the design but entirely inert for now. */}
                 <Card label="Password" padding={24}>
                     <div className="flex flex-col gap-4 max-w-[420px]">
                         <Field label="Current password" htmlFor="currentPassword">
                             <input
                                 id="currentPassword"
                                 type="password"
-                                disabled
                                 placeholder="••••••••"
-                                className={disabledInputClass}
+                                value={currentPassword}
+                                onChange={(e) => {
+                                    setCurrentPassword(e.target.value);
+                                    setPasswordError('');
+                                    setPasswordSuccess(false);
+                                }}
+                                className={inputClass}
                             />
                         </Field>
                         <Field label="New password" htmlFor="newPassword">
                             <input
                                 id="newPassword"
                                 type="password"
-                                disabled
                                 placeholder="••••••••"
-                                className={disabledInputClass}
+                                value={newPassword}
+                                onChange={(e) => {
+                                    setNewPassword(e.target.value);
+                                    setPasswordError('');
+                                    setPasswordSuccess(false);
+                                }}
+                                className={inputClass}
                             />
                         </Field>
                         <Field label="Confirm new password" htmlFor="confirmPassword">
                             <input
                                 id="confirmPassword"
                                 type="password"
-                                disabled
                                 placeholder="••••••••"
-                                className={disabledInputClass}
+                                value={confirmPassword}
+                                onChange={(e) => {
+                                    setConfirmPassword(e.target.value);
+                                    setPasswordError('');
+                                    setPasswordSuccess(false);
+                                }}
+                                className={inputClass}
                             />
                         </Field>
                         <ActionButton
-                            onClick={() => {}}
+                            onClick={handleChangePassword}
                             variant="outline"
                             stretch={false}
-                            disabled
-                            className="h-10 px-5 text-[14px] font-semibold self-start opacity-60 cursor-not-allowed"
+                            disabled={isChangingPassword || !currentPassword || !newPassword || !confirmPassword}
+                            className="h-10 px-5 text-[14px] font-semibold self-start"
                         >
-                            Update password
+                            {isChangingPassword ? 'Updating…' : 'Update password'}
                         </ActionButton>
-                        <p className="text-[12px] text-ink-3">Password changes aren&apos;t available yet.</p>
+                        {passwordError && <p className="text-[12px] text-[#b3261e]">{passwordError}</p>}
+                        {passwordSuccess && <p className="text-[12px] text-ink-3">Password updated.</p>}
                     </div>
                 </Card>
             </div>

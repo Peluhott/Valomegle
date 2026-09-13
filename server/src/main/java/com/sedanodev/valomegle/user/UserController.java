@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+import com.sedanodev.valomegle.user.request.ChangePasswordRequest;
 import com.sedanodev.valomegle.user.request.CreateUser;
 import com.sedanodev.valomegle.user.request.LoginRequest;
 import com.sedanodev.valomegle.user.request.UpdateProfileRequest;
@@ -47,5 +48,11 @@ public class UserController {
     public ResponseEntity<?> updateProfile(Authentication authentication, @RequestBody UpdateProfileRequest request) {
         ProfileResponse response = userService.updateProfile(authentication.getName(), request);
         return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/me/password")
+    public ResponseEntity<?> changePassword(Authentication authentication, @RequestBody ChangePasswordRequest request) {
+        userService.changePassword(authentication.getName(), request);
+        return ResponseEntity.ok().build();
     }
 }
