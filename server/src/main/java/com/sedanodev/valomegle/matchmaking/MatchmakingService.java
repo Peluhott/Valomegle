@@ -16,7 +16,6 @@ import com.sedanodev.valomegle.match.MatchRegistry;
 import com.sedanodev.valomegle.match.UserDisconnectedEvent;
 import com.sedanodev.valomegle.matchmaking.request.JoinQueueRequest;
 import com.sedanodev.valomegle.user.RankOrder;
-import com.sedanodev.valomegle.user.User;
 import com.sedanodev.valomegle.user.UserRepository;
 import com.sedanodev.valomegle.user.UserService;
 import com.sedanodev.valomegle.user.exception.UserNotFoundException;
@@ -61,13 +60,11 @@ public class MatchmakingService {
             throw new IllegalArgumentException("You already have a pending call invite");
         }
 
-        User user = userRepository.findByUsername(userId)
+        userRepository.findByUsername(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
 
         MatchTicket ticket = new MatchTicket(
                 userId,
-                user.getRank(),
-                user.getRegion(),
                 prefs != null ? prefs.getRankLo() : null,
                 prefs != null ? prefs.getRankHi() : null,
                 prefs != null && prefs.getRegions() != null ? prefs.getRegions() : List.of());
@@ -133,13 +130,13 @@ public class MatchmakingService {
         if (raw == null) {
             // No ticket on record (shouldn't normally happen for someone still in the
             // queue list) — treat as "no preference" rather than failing the match.
-            return new MatchTicket(userId, null, null, null, null, List.of());
+            return new MatchTicket(userId, null, null, List.of());
         }
         try {
             return objectMapper.readValue((String) raw, MatchTicket.class);
         } catch (JsonProcessingException e) {
             log.warn("Failed to deserialize match ticket for {}: {}", userId, e.getMessage());
-            return new MatchTicket(userId, null, null, null, null, List.of());
+            return new MatchTicket(userId, null, null, List.of());
         }
     }
 
@@ -151,23 +148,21 @@ public class MatchmakingService {
         return regionsCompatible(a, b) && ranksCompatible(a, b);
     }
 
+    // Compatibility is judged purely by what each side selected, never by either
+    // user's actual profile rank/region - a no-preference side is a wildcard that
+    // accepts anyone, matching how "no preference" already behaves for outgoing
+    // filtering below.
     private boolean regionsCompatible(MatchTicket a, MatchTicket b) {
-        boolean aOk = a.regions().isEmpty() || (b.myRegion() != null && a.regions().contains(b.myRegion()));
-        boolean bOk = b.regions().isEmpty() || (a.myRegion() != null && b.regions().contains(a.myRegion()));
-        return aOk && bOk;
+        return a.regions().isEmpty() || b.regions().isEmpty()
+                || a.regions().stream().anyMatch(b.regions()::contains);
     }
 
     private boolean ranksCompatible(MatchTicket a, MatchTicket b) {
-        boolean aOk = a.rankLo() == null || a.rankHi() == null
-                || withinRange(b.myRank(), a.rankLo(), a.rankHi());
-        boolean bOk = b.rankLo() == null || b.rankHi() == null
-                || withinRange(a.myRank(), b.rankLo(), b.rankHi());
-        return aOk && bOk;
-    }
-
-    private boolean withinRange(String rank, String lo, String hi) {
-        int rankIdx = RankOrder.indexOf(rank);
-        return rankIdx >= 0 && rankIdx >= RankOrder.indexOf(lo) && rankIdx <= RankOrder.indexOf(hi);
+        int aLo = a.rankLo() != null ? RankOrder.indexOf(a.rankLo()) : 0;
+        int aHi = a.rankHi() != null ? RankOrder.indexOf(a.rankHi()) : RankOrder.ORDER.size() - 1;
+        int bLo = b.rankLo() != null ? RankOrder.indexOf(b.rankLo()) : 0;
+        int bHi = b.rankHi() != null ? RankOrder.indexOf(b.rankHi()) : RankOrder.ORDER.size() - 1;
+        return aLo <= bHi && bLo <= aHi;
     }
 
     // MVP simplification: each join() triggers at most one match check, so if 3+ users are ever

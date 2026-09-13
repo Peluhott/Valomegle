@@ -39,6 +39,7 @@ export interface CallContextValue {
     isQueued: boolean;
     queueInfo: QueueInfo | null;
     pendingMatchPeer: string | null;
+    searchTimedOut: boolean;
 
     // active/in-progress call state (matchmaking or direct)
     activeCallPeer: string | null;
@@ -69,6 +70,7 @@ export interface CallContextValue {
 }
 
 const CALL_TIMEOUT_MS = 30000;
+const SEARCH_HINT_TIMEOUT_MS = 20000;
 
 const CallContext = createContext<CallContextValue | null>(null);
 
@@ -88,6 +90,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
     const [activeCallPeer, setActiveCallPeer] = useState<string | null>(null);
     const [callState, setCallState] = useState<CallConnectionState | null>(null);
     const [isQueued, setIsQueued] = useState(false);
+    const [searchTimedOut, setSearchTimedOut] = useState(false);
     const [pendingMatchPeer, setPendingMatchPeer] = useState<string | null>(null);
     const [queueInfo, setQueueInfo] = useState<QueueInfo | null>(null);
     const [isMicMuted, setIsMicMuted] = useState(false);
@@ -302,6 +305,20 @@ export function CallProvider({ children }: { children: ReactNode }) {
         return () => clearTimeout(timeoutId);
     }, [pendingMatchPeer]);
 
+    // Hint that the initial search may be stuck after SEARCH_HINT_TIMEOUT_MS —
+    // mirrors the pendingMatchPeer timeout above, but for before any match is
+    // found at all.
+    useEffect(() => {
+        if (!isQueued) {
+            setSearchTimedOut(false);
+            return;
+        }
+        const timeoutId = window.setTimeout(() => {
+            setSearchTimedOut(true);
+        }, SEARCH_HINT_TIMEOUT_MS);
+        return () => clearTimeout(timeoutId);
+    }, [isQueued]);
+
     // Tear down a call that never reaches "connected" (dropped offer, silent ICE
     // stall, offline peer) so it can't hang the UI. handleConnectionStateChange
     // covers the case where the pc actually reports failed/disconnected.
@@ -320,6 +337,11 @@ export function CallProvider({ children }: { children: ReactNode }) {
     // rejoins with no preferences, replacing the old preference-scoped ticket
     // (join() de-dupes by username, so no explicit leave() is needed first).
     const performJoin = async (scope: 'any' | 'prefs', label: string, prefs?: QueuePreferences) => {
+        if (!socketReady) {
+            setMessage('Still connecting — try again in a moment');
+            return;
+        }
+
         const gate = await ensureMicAccess();
         if (!gate.ok) {
             setMessage(gate.message);
@@ -330,8 +352,8 @@ export function CallProvider({ children }: { children: ReactNode }) {
             await apiClient.post('/api/matchmaking/join', prefs);
             setIsQueued(true);
             setQueueInfo({ scope, label });
-        } catch {
-            setMessage('Failed to join queue');
+        } catch (err) {
+            setMessage(extractErrorMessage(err, 'Failed to join queue'));
         }
     };
 
@@ -456,6 +478,7 @@ export function CallProvider({ children }: { children: ReactNode }) {
         isQueued,
         queueInfo,
         pendingMatchPeer,
+        searchTimedOut,
         activeCallPeer,
         callState,
         isMicMuted,

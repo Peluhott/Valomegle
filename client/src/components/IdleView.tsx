@@ -3,7 +3,7 @@ import RankSlider from './RankSlider';
 import RegionChips from './RegionChips';
 import ActionButton from './ActionButton';
 import Card from './Card';
-import { REGIONS, RANKS, rankRangeLabel, type QueuePreferences } from '../constants';
+import { RANKS, rankRangeLabel, type QueuePreferences } from '../constants';
 
 type IdleViewProps = {
     onQueueAny: () => void;
@@ -14,11 +14,6 @@ const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
     const [lo, setLo] = useState(2);
     const [hi, setHi] = useState(4);
     const [picked, setPicked] = useState<string[]>([]);
-
-    const breadth = hi - lo + 1;
-    const regionCount = picked.length || REGIONS.length;
-    const matchCount = Math.max(4, Math.round(breadth * regionCount * 7.3));
-    const prefWait = matchCount > 200 ? '~30s' : matchCount > 90 ? '~1–2m' : '~3–5m';
 
     const queueWithPrefs = () => {
         const rankLabel = rankRangeLabel(lo, hi);
@@ -50,7 +45,6 @@ const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
                 <Card>
                     <div className="flex items-baseline justify-between">
                         <h3 className="text-[19px] font-semibold text-ink">Match by preferences</h3>
-                        <span className="font-mono text-[11px] text-ink-3">{prefWait} wait</span>
                     </div>
                     <p className="text-[14px] leading-[1.5] text-ink-2">
                         Narrow by rank range and region before you queue. Longer wait, closer fit.
@@ -64,7 +58,6 @@ const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
                             <ActionButton onClick={queueWithPrefs} variant="outline" stretch={false} className="h-11 px-5">
                                 Queue with preferences
                             </ActionButton>
-                            <span className="font-mono text-[11px] text-ink-3">{matchCount} players match</span>
                         </div>
                     </div>
                 </Card>

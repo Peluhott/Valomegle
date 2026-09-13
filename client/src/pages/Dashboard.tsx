@@ -15,6 +15,7 @@ export default function Dashboard() {
         isQueued,
         queueInfo,
         pendingMatchPeer,
+        searchTimedOut,
         isMicMuted,
         isPeerAudioMuted,
         joinQueue,
@@ -41,7 +42,11 @@ export default function Dashboard() {
 
     const searchingSubStatus = pendingMatchPeer
         ? 'Match found — waiting to connect...'
-        : undefined;
+        : searchTimedOut
+            ? queueInfo?.scope === 'prefs'
+                ? 'Taking a while — try widening to anybody'
+                : 'Taking a while — hang tight'
+            : undefined;
 
     return (
         <AppShell rightRail={<MatchSidebar />}>

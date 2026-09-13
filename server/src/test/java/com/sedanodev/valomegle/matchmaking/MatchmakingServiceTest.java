@@ -27,6 +27,7 @@ import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.sedanodev.valomegle.call.CallInviteRegistry;
 import com.sedanodev.valomegle.connection.ConnectionService;
 import com.sedanodev.valomegle.match.MatchRegistry;
 import com.sedanodev.valomegle.match.UserDisconnectedEvent;
@@ -116,8 +117,9 @@ class MatchmakingServiceTest {
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
         MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
-                userRepository, objectMapper);
+                userRepository, objectMapper, callInviteRegistry);
         service.onUserDisconnected(new UserDisconnectedEvent("alice"));
 
         verify(messenger).send(eq("bob"), eq("alice"), eq("peer-disconnected"), any());
@@ -136,8 +138,9 @@ class MatchmakingServiceTest {
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);
         ObjectMapper objectMapper = new ObjectMapper();
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
         MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
-                userRepository, objectMapper);
+                userRepository, objectMapper, callInviteRegistry);
         service.onUserDisconnected(new UserDisconnectedEvent("nobody"));
 
         verify(listOps).remove(eq("matchmaking:queue"), anyLong(), eq("nobody"));
@@ -160,9 +163,10 @@ class MatchmakingServiceTest {
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith(null, null)));
         when(userRepository.findByUsername("bob")).thenReturn(Optional.of(userWith(null, null)));
         ObjectMapper objectMapper = new ObjectMapper();
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
 
         MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
-                userRepository, objectMapper);
+                userRepository, objectMapper, callInviteRegistry);
 
         service.join("alice", null);
         service.join("bob", null);
@@ -188,9 +192,10 @@ class MatchmakingServiceTest {
         UserRepository userRepository = mock(UserRepository.class);
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith(null, null)));
         when(userRepository.findByUsername("dave")).thenReturn(Optional.of(userWith(null, null)));
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
 
         MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
-                userRepository, objectMapper);
+                userRepository, objectMapper, callInviteRegistry);
 
         // Alice joins first (queue is empty, so she's simply enqueued as the sole
         // waiting user) - this exercises join()'s real ticket-building from prefs.
@@ -199,18 +204,19 @@ class MatchmakingServiceTest {
         prefs.setRankHi("Platinum");
         service.join("alice", prefs);
 
-        // Two candidates queue up behind her: one out of alice's requested range, one inside it.
+        // Two candidates queue up behind her, each with their own selected rank range:
+        // one that doesn't overlap alice's Silver-Platinum window, one that does.
         queue.addLast("lowRankUser");
         queue.addLast("inRangeUser");
-        putTicket(tickets, objectMapper, new MatchTicket("lowRankUser", "Iron", null, null, null, List.of()));
-        putTicket(tickets, objectMapper, new MatchTicket("inRangeUser", "Gold", null, null, null, List.of()));
+        putTicket(tickets, objectMapper, new MatchTicket("lowRankUser", "Iron", "Bronze", List.of()));
+        putTicket(tickets, objectMapper, new MatchTicket("inRangeUser", "Gold", "Diamond", List.of()));
 
         // Dave's join is the trigger that runs tryMatch() with alice (the longest-waiting
         // user) popped as caller, scanning lowRankUser then inRangeUser as candidates.
         service.join("dave", null);
 
         assertEquals("inRangeUser", matchRegistry.partnerOf("alice"));
-        assertTrue(queue.contains("lowRankUser"), "out-of-range candidate should be restored to the queue");
+        assertTrue(queue.contains("lowRankUser"), "non-overlapping candidate should be restored to the queue");
         assertFalse(queue.contains("inRangeUser"), "matched candidate should be removed from the queue");
     }
 
@@ -228,24 +234,28 @@ class MatchmakingServiceTest {
         MatchRegistry matchRegistry = new MatchRegistry();
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);
-        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith("Gold", "West")));
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith(null, null)));
         when(userRepository.findByUsername("dave")).thenReturn(Optional.of(userWith(null, null)));
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
 
         MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
-                userRepository, objectMapper);
+                userRepository, objectMapper, callInviteRegistry);
 
         // Alice joins first, wanting West only.
         JoinQueueRequest prefs = new JoinQueueRequest();
         prefs.setRegions(List.of("West"));
         service.join("alice", prefs);
 
-        // Candidate wants East only; alice (actual region West) wants West only - mutually incompatible.
+        // Candidate wants East only - mutually incompatible with alice's West-only request.
         queue.addLast("eastOnlyUser");
-        putTicket(tickets, objectMapper,
-                new MatchTicket("eastOnlyUser", "Gold", "East", null, null, List.of("East")));
+        putTicket(tickets, objectMapper, new MatchTicket("eastOnlyUser", null, null, List.of("East")));
 
-        // Dave's join triggers tryMatch() with alice popped as caller against eastOnlyUser.
-        service.join("dave", null);
+        // Dave also wants East only, so he's a genuine mismatch too rather than a
+        // no-preference wildcard - his join triggers tryMatch() with alice popped as
+        // caller against eastOnlyUser, then dave himself once eastOnlyUser is skipped.
+        JoinQueueRequest davePrefs = new JoinQueueRequest();
+        davePrefs.setRegions(List.of("East"));
+        service.join("dave", davePrefs);
 
         assertNull(matchRegistry.partnerOf("alice"));
         assertTrue(queue.contains("eastOnlyUser"), "incompatible candidate should be restored to the queue");
@@ -267,9 +277,11 @@ class MatchmakingServiceTest {
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith(null, null)));
+        when(userRepository.findByUsername("noPrefUser")).thenReturn(Optional.of(userWith(null, null)));
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
 
         MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
-                userRepository, objectMapper);
+                userRepository, objectMapper, callInviteRegistry);
 
         // Alice joins first with a rank+region preference.
         JoinQueueRequest prefs = new JoinQueueRequest();
@@ -278,12 +290,50 @@ class MatchmakingServiceTest {
         prefs.setRegions(List.of("West"));
         service.join("alice", prefs);
 
-        // Candidate queued with quick-match (no preferences at all), but their actual
-        // rank/region happen to satisfy alice's requested range - this join triggers
-        // tryMatch() with alice popped as caller against this candidate.
-        when(userRepository.findByUsername("noPrefUser")).thenReturn(Optional.of(userWith("Gold", "West")));
+        // Candidate queued with quick-match (no preferences at all) - a no-preference
+        // ticket is a wildcard, so it satisfies any filter regardless of what its user's
+        // actual profile rank/region might be. This join triggers tryMatch() with alice
+        // popped as caller against this candidate.
         service.join("noPrefUser", null);
 
         assertEquals("noPrefUser", matchRegistry.partnerOf("alice"));
+    }
+
+    @Test
+    void overlappingSelectedRankRangesMatchRegardlessOfActualRank() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        Deque<String> queue = new ArrayDeque<>();
+        Map<String, String> tickets = new HashMap<>();
+        queueBackedListOps(redisTemplate, queue);
+        ticketBackedHashOps(redisTemplate, tickets);
+
+        WebSocketMessenger messenger = mock(WebSocketMessenger.class);
+        when(messenger.send(any(), any(), any(), any())).thenReturn(true);
+        MatchRegistry matchRegistry = new MatchRegistry();
+        ConnectionService connectionService = mock(ConnectionService.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith(null, null)));
+        when(userRepository.findByUsername("bob")).thenReturn(Optional.of(userWith(null, null)));
+        ObjectMapper objectMapper = new ObjectMapper();
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
+
+        MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
+                userRepository, objectMapper, callInviteRegistry);
+
+        // Alice selects Iron only.
+        JoinQueueRequest alicePrefs = new JoinQueueRequest();
+        alicePrefs.setRankLo("Iron");
+        alicePrefs.setRankHi("Iron");
+        service.join("alice", alicePrefs);
+
+        // Bob selects Iron-Gold, which overlaps alice's window at Iron - with nobody
+        // else queued, they should match on that overlap alone, independent of either
+        // account's actual profile rank (both null here).
+        JoinQueueRequest bobPrefs = new JoinQueueRequest();
+        bobPrefs.setRankLo("Iron");
+        bobPrefs.setRankHi("Gold");
+        service.join("bob", bobPrefs);
+
+        assertEquals("bob", matchRegistry.partnerOf("alice"));
     }
 }
