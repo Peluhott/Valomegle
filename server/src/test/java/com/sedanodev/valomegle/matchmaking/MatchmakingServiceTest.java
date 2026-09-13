@@ -13,6 +13,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.ListOperations;
 import org.springframework.data.redis.core.StringRedisTemplate;
 
+import com.sedanodev.valomegle.connection.ConnectionService;
 import com.sedanodev.valomegle.match.MatchRegistry;
 import com.sedanodev.valomegle.match.UserDisconnectedEvent;
 import com.sedanodev.valomegle.websocket.WebSocketMessenger;
@@ -36,7 +37,8 @@ class MatchmakingServiceTest {
         MatchRegistry matchRegistry = new MatchRegistry();
         matchRegistry.pair("alice", "bob");
 
-        MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry);
+        ConnectionService connectionService = mock(ConnectionService.class);
+        MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService);
         service.onUserDisconnected(new UserDisconnectedEvent("alice"));
 
         verify(messenger).send(eq("bob"), eq("alice"), eq("peer-disconnected"), any());
@@ -52,7 +54,8 @@ class MatchmakingServiceTest {
         WebSocketMessenger messenger = mock(WebSocketMessenger.class);
         MatchRegistry matchRegistry = new MatchRegistry();
 
-        MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry);
+        ConnectionService connectionService = mock(ConnectionService.class);
+        MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService);
         service.onUserDisconnected(new UserDisconnectedEvent("nobody"));
 
         verify(listOps).remove(eq("matchmaking:queue"), anyLong(), eq("nobody"));

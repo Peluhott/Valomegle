@@ -4,7 +4,6 @@ import { useCurrentUser } from '../hooks/useCurrentUser';
 const linkBase = 'pb-[3px] border-b-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent';
 const activeLink = `${linkBase} text-ink border-accent`;
 const inactiveLink = `${linkBase} text-ink-dis border-transparent`;
-const inertLink = `${linkBase} text-ink-dis border-transparent cursor-default select-none`;
 
 const Nav = () => {
     const navigate = useNavigate();
@@ -26,8 +25,12 @@ const Nav = () => {
                     <Link to="/dashboard" className={isActive('/dashboard') ? activeLink : inactiveLink}>
                         Find a duo
                     </Link>
-                    <span className={inertLink}>Past duos</span>
-                    <span className={inertLink}>Friends</span>
+                    <Link to="/history" className={isActive('/history') ? activeLink : inactiveLink}>
+                        Past duos
+                    </Link>
+                    <Link to="/friends" className={isActive('/friends') ? activeLink : inactiveLink}>
+                        Friends
+                    </Link>
                     <Link to="/profile" className={isActive('/profile') ? activeLink : inactiveLink}>
                         Profile
                     </Link>

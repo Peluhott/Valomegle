@@ -6,6 +6,7 @@ import org.springframework.context.event.EventListener;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
+import com.sedanodev.valomegle.connection.ConnectionService;
 import com.sedanodev.valomegle.match.MatchRegistry;
 import com.sedanodev.valomegle.match.UserDisconnectedEvent;
 import com.sedanodev.valomegle.websocket.WebSocketMessenger;
@@ -21,11 +22,14 @@ public class MatchmakingService {
     private final StringRedisTemplate redisTemplate;
     private final WebSocketMessenger messenger;
     private final MatchRegistry matchRegistry;
+    private final ConnectionService connectionService;
 
-    public MatchmakingService(StringRedisTemplate redisTemplate, WebSocketMessenger messenger, MatchRegistry matchRegistry) {
+    public MatchmakingService(StringRedisTemplate redisTemplate, WebSocketMessenger messenger,
+            MatchRegistry matchRegistry, ConnectionService connectionService) {
         this.redisTemplate = redisTemplate;
         this.messenger = messenger;
         this.matchRegistry = matchRegistry;
+        this.connectionService = connectionService;
     }
 
     public void join(String userId) {
@@ -79,6 +83,12 @@ public class MatchmakingService {
         messenger.send(calleeId, callerId, "queue-matched", Map.of("role", "callee"));
         log.info("Matched users {} (caller) and {} (callee)", callerId, calleeId);
         matchRegistry.pair(callerId, calleeId);
+
+        try {
+            connectionService.recordMatch(callerId, calleeId);
+        } catch (Exception e) {
+            log.warn("Failed to record match history for {} and {}: {}", callerId, calleeId, e.getMessage());
+        }
     }
 
     // Tell the dropped user's partner the peer is gone, then dequeue them. The partner
