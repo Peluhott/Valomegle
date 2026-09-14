@@ -5,12 +5,15 @@ import Profile from './pages/Profile';
 import History from './pages/History';
 import Friends from './pages/Friends';
 import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
 
 function App() {
   return (
     <BrowserRouter>
       <Routes>
-        <Route path="/" element={<WelcomeDashboard />} />
+        <Route element={<PublicRoute />}>
+          <Route path="/" element={<WelcomeDashboard />} />
+        </Route>
         <Route element={<ProtectedRoute />}>
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
