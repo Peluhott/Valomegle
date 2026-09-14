@@ -148,9 +148,9 @@ export function CallProvider({ children }: { children: ReactNode }) {
     }, [resetCallUi]);
 
     useEffect(() => {
-        const token = localStorage.getItem('token');
-        const wsBaseUrl = window.__APP_CONFIG__?.WS_BASE_URL || import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:8080';
-        const ws = new WebSocket(`${wsBaseUrl}/ws?token=${token}`);
+        const defaultWsBaseUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}`;
+        const wsBaseUrl = window.__APP_CONFIG__?.WS_BASE_URL || import.meta.env.VITE_WS_BASE_URL || defaultWsBaseUrl;
+        const ws = new WebSocket(`${wsBaseUrl}/ws`);
         socketRef.current = ws;
         let unmounted = false;
 

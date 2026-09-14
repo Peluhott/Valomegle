@@ -14,22 +14,19 @@ import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.sedanodev.valomegle.match.MatchRegistry;
 import com.sedanodev.valomegle.match.UserDisconnectedEvent;
-import com.sedanodev.valomegle.security.JwtService;
 
 @Slf4j
 @Component
 public class WebSocketHandler extends TextWebSocketHandler {
 
     private final WebSocketSessionManager sessionManager;
-    private final JwtService jwtUtil;
     private final WebSocketMessenger messenger;
     private final ObjectMapper objectMapper;
     private final MatchRegistry matchRegistry;
     private final ApplicationEventPublisher eventPublisher;
 
-    public WebSocketHandler(WebSocketSessionManager sessionManager, JwtService jwtUtil, WebSocketMessenger messenger, ObjectMapper objectMapper, MatchRegistry matchRegistry, ApplicationEventPublisher eventPublisher) {
+    public WebSocketHandler(WebSocketSessionManager sessionManager, WebSocketMessenger messenger, ObjectMapper objectMapper, MatchRegistry matchRegistry, ApplicationEventPublisher eventPublisher) {
         this.sessionManager = sessionManager;
-        this.jwtUtil = jwtUtil;
         this.messenger = messenger;
         this.objectMapper = objectMapper;
         this.matchRegistry = matchRegistry;
@@ -38,22 +35,12 @@ public class WebSocketHandler extends TextWebSocketHandler {
 
     @Override
     public void afterConnectionEstablished(WebSocketSession session) throws Exception {
-        String token = queryParam(session.getUri().getQuery(), "token");
-        if (token == null || token.isEmpty()) {
+        String userId = (String) session.getAttributes().get("userId");
+        if (userId == null) {
             session.close(CloseStatus.POLICY_VIOLATION);
             return;
         }
 
-        String userId;
-        try {
-            userId = jwtUtil.extractUsername(token);
-        } catch (Exception e) {
-            log.debug("Rejected WebSocket handshake: invalid token");
-            session.close(CloseStatus.POLICY_VIOLATION);
-            return;
-        }
-
-        session.getAttributes().put("userId", userId);
         sessionManager.addSession(userId, session);
     }
 
@@ -101,18 +88,5 @@ public class WebSocketHandler extends TextWebSocketHandler {
     @Override
     public void handleTransportError(WebSocketSession session, Throwable exception) {
         log.error("WebSocket transport error for {}", session.getAttributes().get("userId"), exception);
-    }
-
-    private static String queryParam(String query, String key) {
-        if (query == null) {
-            return null;
-        }
-        for (String pair : query.split("&")) {
-            int eq = pair.indexOf('=');
-            if (eq > 0 && pair.substring(0, eq).equals(key)) {
-                return pair.substring(eq + 1);
-            }
-        }
-        return null;
     }
 }

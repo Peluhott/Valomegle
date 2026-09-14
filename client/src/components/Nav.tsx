@@ -1,5 +1,6 @@
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import apiClient from '../api/client';
 
 const linkBase = 'pb-[3px] border-b-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-accent';
 const activeLink = `${linkBase} text-ink border-accent`;
@@ -10,9 +11,12 @@ const Nav = () => {
     const location = useLocation();
     const { user, loading } = useCurrentUser();
 
-    const handleLogout = () => {
-        localStorage.removeItem('token');
-        navigate('/');
+    const handleLogout = async () => {
+        try {
+            await apiClient.post('/api/users/logout');
+        } finally {
+            navigate('/');
+        }
     };
 
     const isActive = (path: string) => location.pathname === path;
