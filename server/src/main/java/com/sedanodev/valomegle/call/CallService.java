@@ -1,10 +1,11 @@
 package com.sedanodev.valomegle.call;
 
+import java.time.Duration;
 import java.util.Map;
 
 import org.springframework.context.event.EventListener;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.web.socket.WebSocketSession;
 
 import com.sedanodev.valomegle.call.exception.CallNoPendingInviteException;
 import com.sedanodev.valomegle.call.exception.CallNotFriendsException;
@@ -16,7 +17,6 @@ import com.sedanodev.valomegle.match.MatchRegistry;
 import com.sedanodev.valomegle.match.UserDisconnectedEvent;
 import com.sedanodev.valomegle.matchmaking.MatchmakingService;
 import com.sedanodev.valomegle.websocket.WebSocketMessenger;
-import com.sedanodev.valomegle.websocket.WebSocketSessionManager;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -24,22 +24,23 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class CallService {
 
+    // Neither side times out an unanswered invite on its own, so the server ends it.
+    private static final Duration INVITE_TTL = Duration.ofSeconds(45);
+
     private final FriendService friendService;
     private final MatchmakingService matchmakingService;
     private final MatchRegistry matchRegistry;
     private final CallInviteRegistry callInviteRegistry;
-    private final WebSocketSessionManager sessionManager;
     private final WebSocketMessenger messenger;
     private final ConnectionService connectionService;
 
     public CallService(FriendService friendService, MatchmakingService matchmakingService, MatchRegistry matchRegistry,
-            CallInviteRegistry callInviteRegistry, WebSocketSessionManager sessionManager, WebSocketMessenger messenger,
+            CallInviteRegistry callInviteRegistry, WebSocketMessenger messenger,
             ConnectionService connectionService) {
         this.friendService = friendService;
         this.matchmakingService = matchmakingService;
         this.matchRegistry = matchRegistry;
         this.callInviteRegistry = callInviteRegistry;
-        this.sessionManager = sessionManager;
         this.messenger = messenger;
         this.connectionService = connectionService;
     }
@@ -49,8 +50,7 @@ public class CallService {
             throw new CallNotFriendsException("You can only call users you're friends with");
         }
 
-        WebSocketSession targetSession = sessionManager.getSession(targetUsername);
-        if (targetSession == null || !targetSession.isOpen()) {
+        if (!messenger.isOnline(targetUsername)) {
             throw new CallTargetUnreachableException(targetUsername + " is not currently online");
         }
 
@@ -122,11 +122,30 @@ public class CallService {
         for (PendingCallInvite invite : callInviteRegistry.clearInvitesFor(userId)) {
             if (invite.callerUsername().equals(userId)) {
                 // Disconnected user was the caller — the callee was left ringing.
-                messenger.send(invite.calleeUsername(), userId, "call-cancelled", Map.of("peerUsername", userId));
+                notifyCallee(invite);
             } else {
                 // Disconnected user was the callee — the caller was left waiting.
-                messenger.send(invite.callerUsername(), userId, "call-declined", Map.of("peerUsername", userId));
+                notifyCaller(invite);
             }
         }
+    }
+
+    @Scheduled(fixedDelay = 10_000)
+    public void expireStaleInvites() {
+        for (PendingCallInvite invite : callInviteRegistry.removeExpired(INVITE_TTL)) {
+            log.info("{}'s call invite to {} expired unanswered", invite.callerUsername(), invite.calleeUsername());
+            notifyCallee(invite);
+            notifyCaller(invite);
+        }
+    }
+
+    private void notifyCallee(PendingCallInvite invite) {
+        messenger.send(invite.calleeUsername(), invite.callerUsername(), "call-cancelled",
+                Map.of("peerUsername", invite.callerUsername()));
+    }
+
+    private void notifyCaller(PendingCallInvite invite) {
+        messenger.send(invite.callerUsername(), invite.calleeUsername(), "call-declined",
+                Map.of("peerUsername", invite.calleeUsername()));
     }
 }

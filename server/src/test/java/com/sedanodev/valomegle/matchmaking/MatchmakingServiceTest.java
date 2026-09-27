@@ -3,6 +3,7 @@ package com.sedanodev.valomegle.matchmaking;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -45,21 +46,16 @@ class MatchmakingServiceTest {
         return listOps;
     }
 
-    // Backs opsForList() with a real Deque so tryMatch()'s multi-step pop/push
+    // Backs opsForList() with a real Deque so matchNewcomer()'s range/remove/push
     // sequences behave like an actual FIFO instead of stubbed one-shot returns.
     @SuppressWarnings("unchecked")
     private static ListOperations<String, String> queueBackedListOps(StringRedisTemplate redisTemplate, Deque<String> queue) {
         ListOperations<String, String> listOps = mock(ListOperations.class);
         when(redisTemplate.opsForList()).thenReturn(listOps);
 
-        when(listOps.leftPop(anyString())).thenAnswer(inv -> queue.pollFirst());
-        when(listOps.size(anyString())).thenAnswer(inv -> (long) queue.size());
+        when(listOps.range(anyString(), anyLong(), anyLong())).thenAnswer(inv -> List.copyOf(queue));
         when(listOps.rightPush(anyString(), anyString())).thenAnswer(inv -> {
             queue.addLast(inv.getArgument(1));
-            return (long) queue.size();
-        });
-        when(listOps.leftPush(anyString(), anyString())).thenAnswer(inv -> {
-            queue.addFirst(inv.getArgument(1));
             return (long) queue.size();
         });
         when(listOps.remove(anyString(), anyLong(), any())).thenAnswer(inv -> {
@@ -157,6 +153,7 @@ class MatchmakingServiceTest {
 
         WebSocketMessenger messenger = mock(WebSocketMessenger.class);
         when(messenger.send(any(), any(), any(), any())).thenReturn(true);
+        when(messenger.isOnline(any())).thenReturn(true);
         MatchRegistry matchRegistry = new MatchRegistry();
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);
@@ -177,7 +174,7 @@ class MatchmakingServiceTest {
     }
 
     @Test
-    void rankRangeSkipsOutOfRangeCandidateAndRestoresItToQueue() {
+    void newcomerSkipsOutOfRangeHeadAndMatchesNextCompatibleCandidate() {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         Deque<String> queue = new ArrayDeque<>();
         Map<String, String> tickets = new HashMap<>();
@@ -187,41 +184,36 @@ class MatchmakingServiceTest {
 
         WebSocketMessenger messenger = mock(WebSocketMessenger.class);
         when(messenger.send(any(), any(), any(), any())).thenReturn(true);
+        when(messenger.isOnline(any())).thenReturn(true);
         MatchRegistry matchRegistry = new MatchRegistry();
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);
         when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith(null, null)));
-        when(userRepository.findByUsername("dave")).thenReturn(Optional.of(userWith(null, null)));
         CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
 
         MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
                 userRepository, objectMapper, callInviteRegistry);
 
-        // Alice joins first (queue is empty, so she's simply enqueued as the sole
-        // waiting user) - this exercises join()'s real ticket-building from prefs.
-        JoinQueueRequest prefs = new JoinQueueRequest();
-        prefs.setRankLo("Silver");
-        prefs.setRankHi("Platinum");
-        service.join("alice", prefs);
-
-        // Two candidates queue up behind her, each with their own selected rank range:
-        // one that doesn't overlap alice's Silver-Platinum window, one that does.
+        // Two users already waiting: the head's range doesn't overlap alice's
+        // Silver-Platinum window, the one behind it does.
         queue.addLast("lowRankUser");
         queue.addLast("inRangeUser");
         putTicket(tickets, objectMapper, new MatchTicket("lowRankUser", "Iron", "Bronze", List.of()));
         putTicket(tickets, objectMapper, new MatchTicket("inRangeUser", "Gold", "Diamond", List.of()));
 
-        // Dave's join is the trigger that runs tryMatch() with alice (the longest-waiting
-        // user) popped as caller, scanning lowRankUser then inRangeUser as candidates.
-        service.join("dave", null);
+        JoinQueueRequest prefs = new JoinQueueRequest();
+        prefs.setRankLo("Silver");
+        prefs.setRankHi("Platinum");
+        service.join("alice", prefs);
 
         assertEquals("inRangeUser", matchRegistry.partnerOf("alice"));
-        assertTrue(queue.contains("lowRankUser"), "non-overlapping candidate should be restored to the queue");
-        assertFalse(queue.contains("inRangeUser"), "matched candidate should be removed from the queue");
+        assertEquals(List.of("lowRankUser"), List.copyOf(queue), "non-overlapping head should keep its place");
+        verify(messenger).send(eq("inRangeUser"), eq("alice"), eq("queue-matched"), eq(Map.of("role", "caller")));
+        verify(messenger).send(eq("alice"), eq("inRangeUser"), eq("queue-matched"), eq(Map.of("role", "callee")));
     }
 
     @Test
-    void mutualRegionMismatchPreventsMatch() {
+    void mutualRegionMismatchLeavesBothQueuedInArrivalOrder() {
         StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
         Deque<String> queue = new ArrayDeque<>();
         Map<String, String> tickets = new HashMap<>();
@@ -231,6 +223,7 @@ class MatchmakingServiceTest {
 
         WebSocketMessenger messenger = mock(WebSocketMessenger.class);
         when(messenger.send(any(), any(), any(), any())).thenReturn(true);
+        when(messenger.isOnline(any())).thenReturn(true);
         MatchRegistry matchRegistry = new MatchRegistry();
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);
@@ -241,25 +234,97 @@ class MatchmakingServiceTest {
         MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
                 userRepository, objectMapper, callInviteRegistry);
 
-        // Alice joins first, wanting West only.
-        JoinQueueRequest prefs = new JoinQueueRequest();
-        prefs.setRegions(List.of("West"));
-        service.join("alice", prefs);
+        JoinQueueRequest alicePrefs = new JoinQueueRequest();
+        alicePrefs.setRegions(List.of("West"));
+        service.join("alice", alicePrefs);
 
-        // Candidate wants East only - mutually incompatible with alice's West-only request.
-        queue.addLast("eastOnlyUser");
-        putTicket(tickets, objectMapper, new MatchTicket("eastOnlyUser", null, null, List.of("East")));
-
-        // Dave also wants East only, so he's a genuine mismatch too rather than a
-        // no-preference wildcard - his join triggers tryMatch() with alice popped as
-        // caller against eastOnlyUser, then dave himself once eastOnlyUser is skipped.
         JoinQueueRequest davePrefs = new JoinQueueRequest();
         davePrefs.setRegions(List.of("East"));
         service.join("dave", davePrefs);
 
         assertNull(matchRegistry.partnerOf("alice"));
-        assertTrue(queue.contains("eastOnlyUser"), "incompatible candidate should be restored to the queue");
-        assertTrue(queue.contains("alice"), "caller should be requeued when no match is found");
+        assertEquals(List.of("alice", "dave"), List.copyOf(queue));
+    }
+
+    @Test
+    void unreachableCandidateIsDiscardedAndNextOneMatched() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        Deque<String> queue = new ArrayDeque<>();
+        Map<String, String> tickets = new HashMap<>();
+        queueBackedListOps(redisTemplate, queue);
+        ticketBackedHashOps(redisTemplate, tickets);
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        WebSocketMessenger messenger = mock(WebSocketMessenger.class);
+        when(messenger.send(any(), any(), any(), any())).thenReturn(true);
+        when(messenger.send(eq("ghost"), any(), any(), any())).thenReturn(false);
+        when(messenger.isOnline(any())).thenReturn(true);
+        MatchRegistry matchRegistry = new MatchRegistry();
+        ConnectionService connectionService = mock(ConnectionService.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith(null, null)));
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
+
+        MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
+                userRepository, objectMapper, callInviteRegistry);
+
+        queue.addLast("ghost");
+        queue.addLast("bob");
+        putTicket(tickets, objectMapper, new MatchTicket("ghost", null, null, List.of()));
+        putTicket(tickets, objectMapper, new MatchTicket("bob", null, null, List.of()));
+
+        service.join("alice", null);
+
+        assertEquals("bob", matchRegistry.partnerOf("alice"));
+        assertTrue(queue.isEmpty());
+        assertFalse(tickets.containsKey("ghost"), "dead entry's ticket should be discarded");
+    }
+
+    @Test
+    void unreachableNewcomerTellsCallerTheMatchFellThrough() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        Deque<String> queue = new ArrayDeque<>();
+        Map<String, String> tickets = new HashMap<>();
+        queueBackedListOps(redisTemplate, queue);
+        ticketBackedHashOps(redisTemplate, tickets);
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        WebSocketMessenger messenger = mock(WebSocketMessenger.class);
+        when(messenger.send(any(), any(), any(), any())).thenReturn(true);
+        when(messenger.send(eq("alice"), any(), any(), any())).thenReturn(false);
+        when(messenger.isOnline(any())).thenReturn(true);
+        MatchRegistry matchRegistry = new MatchRegistry();
+        ConnectionService connectionService = mock(ConnectionService.class);
+        UserRepository userRepository = mock(UserRepository.class);
+        when(userRepository.findByUsername("alice")).thenReturn(Optional.of(userWith(null, null)));
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
+
+        MatchmakingService service = new MatchmakingService(redisTemplate, messenger, matchRegistry, connectionService,
+                userRepository, objectMapper, callInviteRegistry);
+
+        queue.addLast("bob");
+        putTicket(tickets, objectMapper, new MatchTicket("bob", null, null, List.of()));
+
+        service.join("alice", null);
+
+        verify(messenger).send(eq("bob"), eq("alice"), eq("peer-disconnected"), any());
+        assertNull(matchRegistry.partnerOf("bob"));
+        assertTrue(tickets.isEmpty());
+        verifyNoInteractions(connectionService);
+    }
+
+    @Test
+    void joinWithoutOpenSocketIsRejected() {
+        StringRedisTemplate redisTemplate = mock(StringRedisTemplate.class);
+        WebSocketMessenger messenger = mock(WebSocketMessenger.class);
+        when(messenger.isOnline("alice")).thenReturn(false);
+        CallInviteRegistry callInviteRegistry = mock(CallInviteRegistry.class);
+
+        MatchmakingService service = new MatchmakingService(redisTemplate, messenger, new MatchRegistry(),
+                mock(ConnectionService.class), mock(UserRepository.class), new ObjectMapper(), callInviteRegistry);
+
+        assertThrows(IllegalArgumentException.class, () -> service.join("alice", null));
+        verifyNoInteractions(redisTemplate);
     }
 
     @Test
@@ -273,6 +338,7 @@ class MatchmakingServiceTest {
 
         WebSocketMessenger messenger = mock(WebSocketMessenger.class);
         when(messenger.send(any(), any(), any(), any())).thenReturn(true);
+        when(messenger.isOnline(any())).thenReturn(true);
         MatchRegistry matchRegistry = new MatchRegistry();
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);
@@ -292,8 +358,7 @@ class MatchmakingServiceTest {
 
         // Candidate queued with quick-match (no preferences at all) - a no-preference
         // ticket is a wildcard, so it satisfies any filter regardless of what its user's
-        // actual profile rank/region might be. This join triggers tryMatch() with alice
-        // popped as caller against this candidate.
+        // actual profile rank/region might be.
         service.join("noPrefUser", null);
 
         assertEquals("noPrefUser", matchRegistry.partnerOf("alice"));
@@ -309,6 +374,7 @@ class MatchmakingServiceTest {
 
         WebSocketMessenger messenger = mock(WebSocketMessenger.class);
         when(messenger.send(any(), any(), any(), any())).thenReturn(true);
+        when(messenger.isOnline(any())).thenReturn(true);
         MatchRegistry matchRegistry = new MatchRegistry();
         ConnectionService connectionService = mock(ConnectionService.class);
         UserRepository userRepository = mock(UserRepository.class);

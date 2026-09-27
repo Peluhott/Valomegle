@@ -1,5 +1,7 @@
 package com.sedanodev.valomegle.call;
 
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -13,13 +15,13 @@ import org.springframework.stereotype.Component;
 @Component
 public class CallInviteRegistry {
 
-    // callerUsername -> calleeUsername
-    private final Map<String, String> outgoingInvites = new ConcurrentHashMap<>();
+    // callerUsername -> invite
+    private final Map<String, PendingCallInvite> outgoingInvites = new ConcurrentHashMap<>();
     // calleeUsername -> callerUsername (reverse index so "who invited me" is O(1))
     private final Map<String, String> incomingInvites = new ConcurrentHashMap<>();
 
     public void record(String callerUsername, String calleeUsername) {
-        outgoingInvites.put(callerUsername, calleeUsername);
+        outgoingInvites.put(callerUsername, new PendingCallInvite(callerUsername, calleeUsername, Instant.now()));
         incomingInvites.put(calleeUsername, callerUsername);
     }
 
@@ -31,7 +33,8 @@ public class CallInviteRegistry {
     // Who this user is currently inviting, if anyone — used for cancel and for the
     // matchmaking queue-join guard.
     public String calleeInvitedByUser(String callerUsername) {
-        return outgoingInvites.get(callerUsername);
+        PendingCallInvite invite = outgoingInvites.get(callerUsername);
+        return invite != null ? invite.calleeUsername() : null;
     }
 
     public boolean hasPendingInvite(String username) {
@@ -50,18 +53,35 @@ public class CallInviteRegistry {
     public List<PendingCallInvite> clearInvitesFor(String username) {
         List<PendingCallInvite> cleared = new ArrayList<>();
 
-        String calleeUsername = outgoingInvites.remove(username);
-        if (calleeUsername != null) {
-            incomingInvites.remove(calleeUsername);
-            cleared.add(new PendingCallInvite(username, calleeUsername));
+        PendingCallInvite outgoing = outgoingInvites.remove(username);
+        if (outgoing != null) {
+            incomingInvites.remove(outgoing.calleeUsername());
+            cleared.add(outgoing);
         }
 
         String callerUsername = incomingInvites.remove(username);
         if (callerUsername != null) {
-            outgoingInvites.remove(callerUsername);
-            cleared.add(new PendingCallInvite(callerUsername, username));
+            PendingCallInvite incoming = outgoingInvites.remove(callerUsername);
+            if (incoming != null) {
+                cleared.add(incoming);
+            }
         }
 
         return cleared;
+    }
+
+    public List<PendingCallInvite> removeExpired(Duration maxAge) {
+        Instant cutoff = Instant.now().minus(maxAge);
+        List<PendingCallInvite> expired = new ArrayList<>();
+
+        for (PendingCallInvite invite : outgoingInvites.values()) {
+            if (invite.createdAt().isBefore(cutoff)
+                    && outgoingInvites.remove(invite.callerUsername(), invite)) {
+                incomingInvites.remove(invite.calleeUsername(), invite.callerUsername());
+                expired.add(invite);
+            }
+        }
+
+        return expired;
     }
 }

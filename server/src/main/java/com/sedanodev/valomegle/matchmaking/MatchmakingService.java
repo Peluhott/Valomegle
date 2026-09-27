@@ -1,10 +1,11 @@
 package com.sedanodev.valomegle.matchmaking;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
+import org.springframework.boot.context.event.ApplicationReadyEvent;
 import org.springframework.context.event.EventListener;
+import org.springframework.dao.DataAccessException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
@@ -37,6 +38,7 @@ public class MatchmakingService {
     private final UserRepository userRepository;
     private final ObjectMapper objectMapper;
     private final CallInviteRegistry callInviteRegistry;
+    private final Object queueLock = new Object();
 
     public MatchmakingService(StringRedisTemplate redisTemplate, WebSocketMessenger messenger,
             MatchRegistry matchRegistry, ConnectionService connectionService, UserRepository userRepository,
@@ -59,6 +61,11 @@ public class MatchmakingService {
         if (callInviteRegistry.hasPendingInvite(userId)) {
             throw new IllegalArgumentException("You already have a pending call invite");
         }
+        // Match notifications go over the socket, so queueing without one would leave
+        // a ticket nobody can ever be told about.
+        if (!messenger.isOnline(userId)) {
+            throw new IllegalArgumentException("Not connected - refresh and try again");
+        }
 
         userRepository.findByUsername(userId)
                 .orElseThrow(() -> new UserNotFoundException("User not found: " + userId));
@@ -68,20 +75,20 @@ public class MatchmakingService {
                 prefs != null ? prefs.getRankLo() : null,
                 prefs != null ? prefs.getRankHi() : null,
                 prefs != null && prefs.getRegions() != null ? prefs.getRegions() : List.of());
-        saveTicket(ticket);
 
-        redisTemplate.opsForList().remove(QUEUE_KEY, 0, userId);
-        redisTemplate.opsForList().rightPush(QUEUE_KEY, userId);
-        log.info("User joined matchmaking queue: {}", userId);
-
-        tryMatch();
+        synchronized (queueLock) {
+            redisTemplate.opsForList().remove(QUEUE_KEY, 0, userId);
+            saveTicket(ticket);
+            log.info("User joined matchmaking queue: {}", userId);
+            matchNewcomer(ticket);
+        }
     }
 
     // Read-only preview: how many currently-queued, actually-online tickets would be
     // compatible with the given (not-yet-submitted) preferences. Never pops/mutates
-    // the queue the way tryMatch() does. isOnline() excludes tickets left behind by an
+    // the queue the way matchNewcomer() does. isOnline() excludes tickets left behind by an
     // unclean disconnect (killed tab, network loss before the close frame) that
-    // onUserDisconnected() hasn't dequeued yet - see tryMatch()'s comment above.
+    // the heartbeat hasn't closed yet - see matchNewcomer()'s comment.
     public int countCompatible(String userId, JoinQueueRequest prefs) {
         validate(prefs);
 
@@ -109,9 +116,27 @@ public class MatchmakingService {
     }
 
     public void leave(String userId) {
-        redisTemplate.opsForList().remove(QUEUE_KEY, 0, userId);
-        removeTicket(userId);
+        synchronized (queueLock) {
+            redisTemplate.opsForList().remove(QUEUE_KEY, 0, userId);
+            removeTicket(userId);
+        }
         log.info("User left matchmaking queue: {}", userId);
+    }
+
+    // Queue entries outlive a restart in Redis, but no socket does - anything left
+    // over is a ghost that would otherwise sit in the queue and make CallService
+    // report its user as busy. Assumes a single backend instance: with more than
+    // one, this would wipe queue entries owned by the others.
+    @EventListener(ApplicationReadyEvent.class)
+    public void clearStaleQueue() {
+        try {
+            redisTemplate.delete(List.of(QUEUE_KEY, TICKETS_KEY));
+            log.info("Cleared matchmaking queue left over from previous run");
+        } catch (DataAccessException e) {
+            // Don't fail startup over this - dead entries are still discarded lazily
+            // when matchNewcomer() fails to reach them.
+            log.warn("Could not clear stale matchmaking queue on startup: {}", e.getMessage());
+        }
     }
 
     // Used by the call feature to keep a queued user from also placing/receiving a
@@ -196,77 +221,57 @@ public class MatchmakingService {
         return aLo <= bHi && bLo <= aHi;
     }
 
-    // MVP simplification: each join() triggers at most one match check, so if 3+ users are ever
-    // queued simultaneously, only the earliest two (still-reachable) ones match per join event.
-    // Fine for the 2-user manual test this targets, not a real concurrent-load design.
+    // Matches the newcomer against the longest-waiting compatible, reachable entry.
+    // Every queue mutation holds queueLock and every join() matches immediately, so
+    // no two compatible users are ever left waiting together - checking only the
+    // newcomer is enough. The lock is in-process, which assumes a single backend
+    // instance; running several would need a Redis lock or Lua script instead.
     //
-    // onUserDisconnected() dequeues on a clean socket close, but an unclean drop (killed process,
-    // network loss before the close frame) can still leave a dead entry in the queue. We don't
-    // detect that until we try to deliver to it - messenger.send()'s return value IS the liveness
-    // check, there's no separate way to peek at it - so the caller slot is retried with fresh
-    // candidates (discarding dead ones) until we find one we can actually reach, or the queue runs
-    // dry. The callee is only ever notified once the caller is confirmed reachable, so a stale
-    // caller entry can no longer produce a "matched with a peer who was never there" notification
-    // on the callee's side.
-    //
-    // The candidate scan is also bounded and single-pass per join() call: it snapshots the queue
-    // length up front and considers at most that many candidates, skipping (and restoring)
-    // incompatible ones rather than looping indefinitely looking for a compatible match.
-    private void tryMatch() {
-        String callerId = redisTemplate.opsForList().leftPop(QUEUE_KEY);
-        if (callerId == null) {
-            return;
-        }
+    // messenger.send()'s return value is the liveness check: an unclean drop the
+    // heartbeat hasn't caught yet can still leave a dead entry, which is discarded
+    // here when delivery to it fails.
+    private void matchNewcomer(MatchTicket newcomer) {
+        String newcomerId = newcomer.username();
+        List<String> queued = redisTemplate.opsForList().range(QUEUE_KEY, 0, -1);
+        String callerId = null;
 
-        MatchTicket callerTicket = loadTicket(callerId);
-        // Snapshot the queue length up front so this scan is bounded even though it's
-        // popping and (for incompatible entries) pushing candidates back — the queue
-        // only shrinks during the loop itself, it can't grow from *this* call.
-        long scanLimit = redisTemplate.opsForList().size(QUEUE_KEY);
-        List<String> incompatible = new ArrayList<>();
-        String calleeId = null;
-
-        for (long i = 0; i < scanLimit; i++) {
-            String candidateId = redisTemplate.opsForList().leftPop(QUEUE_KEY);
-            if (candidateId == null) {
-                break;
-            }
-
-            MatchTicket candidateTicket = loadTicket(candidateId);
-            if (!compatible(callerTicket, candidateTicket)) {
-                incompatible.add(candidateId);
+        for (String candidateId : queued != null ? queued : List.<String>of()) {
+            if (candidateId.equals(newcomerId) || !compatible(newcomer, loadTicket(candidateId))) {
                 continue;
             }
 
-            if (messenger.send(callerId, candidateId, "queue-matched", Map.of("role", "caller"))) {
-                calleeId = candidateId;
+            redisTemplate.opsForList().remove(QUEUE_KEY, 0, candidateId);
+            if (messenger.send(candidateId, newcomerId, "queue-matched", Map.of("role", "caller"))) {
+                callerId = candidateId;
                 break;
             }
             log.debug("Discarding unreachable queue entry: {}", candidateId);
-            // Dead session — matches today's behavior of not requeueing it.
+            removeTicket(candidateId);
         }
 
-        // Restore skipped-but-incompatible candidates to the front, in their original
-        // relative order, so a narrow preference doesn't get starved behind new arrivals.
-        for (int i = incompatible.size() - 1; i >= 0; i--) {
-            redisTemplate.opsForList().leftPush(QUEUE_KEY, incompatible.get(i));
-        }
-
-        if (calleeId == null) {
-            redisTemplate.opsForList().rightPush(QUEUE_KEY, callerId);
+        if (callerId == null) {
+            redisTemplate.opsForList().rightPush(QUEUE_KEY, newcomerId);
             return;
         }
 
-        messenger.send(calleeId, callerId, "queue-matched", Map.of("role", "callee"));
-        log.info("Matched users {} (caller) and {} (callee)", callerId, calleeId);
-        matchRegistry.pair(callerId, calleeId);
         removeTicket(callerId);
-        removeTicket(calleeId);
+        removeTicket(newcomerId);
+
+        if (!messenger.send(newcomerId, callerId, "queue-matched", Map.of("role", "callee"))) {
+            // The caller's client has already left its queued state, so it's told the
+            // match fell through rather than silently requeued.
+            messenger.send(callerId, newcomerId, "peer-disconnected", Map.of());
+            log.info("Match between {} and {} fell through: callee unreachable", callerId, newcomerId);
+            return;
+        }
+
+        log.info("Matched users {} (caller) and {} (callee)", callerId, newcomerId);
+        matchRegistry.pair(callerId, newcomerId);
 
         try {
-            connectionService.recordMatch(callerId, calleeId);
+            connectionService.recordMatch(callerId, newcomerId);
         } catch (Exception e) {
-            log.warn("Failed to record match history for {} and {}: {}", callerId, calleeId, e.getMessage());
+            log.warn("Failed to record match history for {} and {}: {}", callerId, newcomerId, e.getMessage());
         }
     }
 

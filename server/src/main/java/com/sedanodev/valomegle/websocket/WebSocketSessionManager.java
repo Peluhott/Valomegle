@@ -1,6 +1,8 @@
 package com.sedanodev.valomegle.websocket;
 
 import java.io.IOException;
+import java.util.Collection;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -27,11 +29,26 @@ public class WebSocketSessionManager {
         }
     }
 
+    // Matches by session id rather than identity: the map holds the thread-safe
+    // decorator, while the close callback hands back the raw underlying session.
+    // Returns false when the user has already reconnected with a newer session.
     public boolean removeSession(String userId, WebSocketSession session) {
-        return sessions.remove(userId, session);
+        boolean[] removed = {false};
+        sessions.computeIfPresent(userId, (key, current) -> {
+            if (current.getId().equals(session.getId())) {
+                removed[0] = true;
+                return null;
+            }
+            return current;
+        });
+        return removed[0];
     }
 
     public WebSocketSession getSession(String userId) {
         return sessions.get(userId);
+    }
+
+    public Collection<WebSocketSession> allSessions() {
+        return List.copyOf(sessions.values());
     }
 }

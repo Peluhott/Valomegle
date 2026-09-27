@@ -8,8 +8,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.CloseStatus;
+import org.springframework.web.socket.PongMessage;
 import org.springframework.web.socket.TextMessage;
 import org.springframework.web.socket.WebSocketSession;
+import org.springframework.web.socket.handler.ConcurrentWebSocketSessionDecorator;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
 
 import com.sedanodev.valomegle.match.MatchRegistry;
@@ -18,6 +20,9 @@ import com.sedanodev.valomegle.match.UserDisconnectedEvent;
 @Slf4j
 @Component
 public class WebSocketHandler extends TextWebSocketHandler {
+
+    private static final int SEND_TIME_LIMIT_MS = 10_000;
+    private static final int SEND_BUFFER_LIMIT_BYTES = 512 * 1024;
 
     private final WebSocketSessionManager sessionManager;
     private final WebSocketMessenger messenger;
@@ -41,23 +46,37 @@ public class WebSocketHandler extends TextWebSocketHandler {
             return;
         }
 
-        sessionManager.addSession(userId, session);
+        session.getAttributes().put(WebSocketHeartbeat.LAST_PONG_ATTRIBUTE, System.currentTimeMillis());
+        // The heartbeat thread sends pings alongside request threads relaying frames,
+        // and a raw Tomcat session throws on concurrent sends.
+        sessionManager.addSession(userId,
+                new ConcurrentWebSocketSessionDecorator(session, SEND_TIME_LIMIT_MS, SEND_BUFFER_LIMIT_BYTES));
+    }
+
+    @Override
+    protected void handlePongMessage(WebSocketSession session, PongMessage message) {
+        session.getAttributes().put(WebSocketHeartbeat.LAST_PONG_ATTRIBUTE, System.currentTimeMillis());
     }
 
     @Override
     protected void handleTextMessage(WebSocketSession session, TextMessage message) throws Exception {
         String fromUserId = (String) session.getAttributes().get("userId");
 
+        // Frame size is already bounded before this runs: Tomcat's default 8 KB text
+        // buffer closes the session (code 1009) on anything larger, which comfortably
+        // fits signaling frames (SDP offers/answers, trickled ICE candidates).
         JsonNode node;
         try {
             node = objectMapper.readTree(message.getPayload());
         } catch (Exception e) {
             log.debug("Dropped frame from {}: malformed JSON", fromUserId);
+            messenger.send(fromUserId, "server", "error", Map.of("reason", "malformed-frame"));
             return;
         }
 
         if (!node.hasNonNull("type") || !node.hasNonNull("payload")) {
             log.debug("Dropped frame from {}: missing required field", fromUserId);
+            messenger.send(fromUserId, "server", "error", Map.of("reason", "malformed-frame"));
             return;
         }
 
