@@ -77,6 +77,37 @@ public class MatchmakingService {
         tryMatch();
     }
 
+    // Read-only preview: how many currently-queued, actually-online tickets would be
+    // compatible with the given (not-yet-submitted) preferences. Never pops/mutates
+    // the queue the way tryMatch() does. isOnline() excludes tickets left behind by an
+    // unclean disconnect (killed tab, network loss before the close frame) that
+    // onUserDisconnected() hasn't dequeued yet - see tryMatch()'s comment above.
+    public int countCompatible(String userId, JoinQueueRequest prefs) {
+        validate(prefs);
+
+        MatchTicket hypothetical = new MatchTicket(
+                userId,
+                prefs != null ? prefs.getRankLo() : null,
+                prefs != null ? prefs.getRankHi() : null,
+                prefs != null && prefs.getRegions() != null ? prefs.getRegions() : List.of());
+
+        List<String> queuedUserIds = redisTemplate.opsForList().range(QUEUE_KEY, 0, -1);
+        if (queuedUserIds == null) {
+            return 0;
+        }
+
+        int count = 0;
+        for (String candidateId : queuedUserIds) {
+            if (candidateId.equals(userId) || !messenger.isOnline(candidateId)) {
+                continue;
+            }
+            if (compatible(hypothetical, loadTicket(candidateId))) {
+                count++;
+            }
+        }
+        return count;
+    }
+
     public void leave(String userId) {
         redisTemplate.opsForList().remove(QUEUE_KEY, 0, userId);
         removeTicket(userId);

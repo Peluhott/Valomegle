@@ -21,6 +21,11 @@ public class WebSocketMessenger {
         this.objectMapper = objectMapper;
     }
 
+    public boolean isOnline(String userId) {
+        WebSocketSession session = sessionManager.getSession(userId);
+        return session != null && session.isOpen();
+    }
+
     public boolean send(String targetUserId, String fromUserId, String type, Object payload) {
         WebSocketSession targetSession = sessionManager.getSession(targetUserId);
         if (targetSession == null || !targetSession.isOpen()) {

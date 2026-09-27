@@ -2,10 +2,19 @@ services:
   redis:
     image: redis:7-alpine
     ports: ["6379:6379"]
+  coturn:
+    image: coturn/coturn:latest
+    command: ["-c", "/etc/coturn/turnserver.conf", "--static-auth-secret=${TURN_SECRET}"]
+    volumes:
+      - ./coturn/turnserver.conf:/etc/coturn/turnserver.conf:ro
+    ports:
+      - "3478:3478/tcp"
+      - "3478:3478/udp"
+      - "49160-49200:49160-49200/udp"
   backend:
     build: ./server
     ports: ["8080:8080"]
-    depends_on: [redis]
+    depends_on: [redis, coturn]
     environment:
       DB_URL: ${DB_URL}
       DB_USERNAME: ${DB_USERNAME}
@@ -14,12 +23,18 @@ services:
       ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-http://localhost:5173}
       REDIS_HOST: ${REDIS_HOST:-redis}
       REDIS_PORT: ${REDIS_PORT:-6379}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-}
+      REDIS_SSL: ${REDIS_SSL:-false}
+      TURN_URL: ${TURN_URL:-}
+      TURN_SECRET: ${TURN_SECRET:-}
   frontend:
     build:
       context: ./client
-    # API_BASE_URL/WS_BASE_URL are read at container start (written into
-    # config.js), not baked into the image, so the same built/pushed image
-    # can point at a different backend just by changing these and restarting.
+    # API_BASE_URL/WS_BASE_URL are read at container start (written into config.js),
+    # not baked into the image, so the same built/pushed image can point at a
+    # different backend just by changing these and restarting. TURN credentials are
+    # no longer part of this config - the client fetches short-lived ones from the
+    # backend (see turn/TurnController.java) instead.
     environment:
       API_BASE_URL: ${API_BASE_URL:-http://localhost:8080}
       WS_BASE_URL: ${WS_BASE_URL:-ws://localhost:8080}

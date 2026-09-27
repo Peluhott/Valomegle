@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import RankSlider from './RankSlider';
 import RegionChips from './RegionChips';
 import ActionButton from './ActionButton';
+import apiClient from '../api/client';
 import { RANKS, rankRangeLabel, type QueuePreferences } from '../constants';
 
 const optionCard = 'border-[1.5px] border-accent rounded-card bg-[#fffafa] p-6 flex flex-col gap-3.5';
@@ -11,10 +12,26 @@ type IdleViewProps = {
     onQueueWithPrefs: (prefs: QueuePreferences, label: string) => void;
 };
 
+async function getMatchCount(prefs: QueuePreferences): Promise<number> {
+    const response = await apiClient.post<{ count: number }>('/api/matchmaking/match-count', prefs);
+    return response.data.count;
+}
+
 const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
     const [lo, setLo] = useState(2);
     const [hi, setHi] = useState(4);
     const [picked, setPicked] = useState<string[]>([]);
+    const [matchCount, setMatchCount] = useState<number | null>(null);
+
+    useEffect(() => {
+        const prefs: QueuePreferences = { rankLo: RANKS[lo], rankHi: RANKS[hi], regions: picked };
+        const timeoutId = window.setTimeout(() => {
+            getMatchCount(prefs)
+                .then(setMatchCount)
+                .catch(() => setMatchCount(null));
+        }, 300);
+        return () => window.clearTimeout(timeoutId);
+    }, [lo, hi, picked]);
 
     const queueWithPrefs = () => {
         const rankLabel = rankRangeLabel(lo, hi);
@@ -46,6 +63,11 @@ const IdleView = ({ onQueueAny, onQueueWithPrefs }: IdleViewProps) => {
                 <div className={optionCard}>
                     <div className="flex items-baseline justify-between">
                         <h3 className="text-[19px] font-semibold text-ink">Match by preferences</h3>
+                        {matchCount !== null && (
+                            <span className="font-mono text-[11px] text-ink-3">
+                                {matchCount === 0 ? 'No matches right now' : `${matchCount} match${matchCount === 1 ? '' : 'es'} now`}
+                            </span>
+                        )}
                     </div>
                     <p className="text-[14px] leading-[1.5] text-ink-2">
                         Narrow by rank range and region before you queue. Longer wait, closer fit.
