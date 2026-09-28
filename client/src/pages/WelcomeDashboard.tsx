@@ -23,6 +23,11 @@ export default function WelcomeDashboard() {
                     : <RegisterForm handleSwitchForm={handleSwitchForm} />
                 }
             </div>
+
+            <p className="mt-6 max-w-md text-center text-[12px] text-ink-4">
+                Valomegle is an independent, fan-made project and is not affiliated with, endorsed by, or
+                sponsored by Riot Games, VALORANT, or Omegle.
+            </p>
         </div>
     );
 }

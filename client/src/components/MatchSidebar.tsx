@@ -1,10 +1,17 @@
 import { Link } from 'react-router-dom';
 import { useCurrentUser } from '../hooks/useCurrentUser';
+import { useFriends } from '../hooks/useFriends';
+import { useRecentMatches } from '../hooks/useRecentMatches';
+import ActionButton from './ActionButton';
 import Card from './Card';
 import MicLevelMeter from './MicLevelMeter';
 
 const MatchSidebar = () => {
     const { user, loading } = useCurrentUser();
+    const { matches, loading: matchesLoading } = useRecentMatches();
+    const { statusFor, sendRequest } = useFriends();
+    const recentMatch = matches[0];
+    const recentStatus = recentMatch ? statusFor(recentMatch.username) : 'none';
 
     return (
         <div className="flex flex-col gap-5 w-full">
@@ -44,26 +51,68 @@ const MatchSidebar = () => {
                 <MicLevelMeter />
             </Card>
 
-            <Card label="Recent duo" padding={20} dashed>
-                <p className="text-[12px] leading-[1.5] text-ink-3">
-                    Coming soon — duo history isn't tracked yet.
-                </p>
-                <div className="flex gap-2">
-                    <button
-                        type="button"
-                        disabled
-                        className="flex-1 h-8 rounded-control border border-line-2 text-[12px] text-ink-4 cursor-not-allowed"
-                    >
-                        Add friend
-                    </button>
-                    <button
-                        type="button"
-                        disabled
-                        className="flex-1 h-8 rounded-control border border-line-2 text-[12px] text-ink-4 cursor-not-allowed"
-                    >
-                        Block
-                    </button>
-                </div>
+            <Card label="Recent duo" padding={20}>
+                {matchesLoading ? (
+                    <p className="text-[12px] leading-[1.5] text-ink-3">Loading…</p>
+                ) : recentMatch ? (
+                    <>
+                        <div className="flex flex-col gap-1">
+                            <span className="text-[13px] font-medium text-ink">{recentMatch.username}</span>
+                            <span className="font-mono text-[11px] text-ink-3">
+                                {new Date(recentMatch.matchedAt).toLocaleString()}
+                            </span>
+                        </div>
+                        <div className="flex gap-2">
+                            {recentStatus === 'none' && (
+                                <ActionButton
+                                    onClick={() => sendRequest(recentMatch.username)}
+                                    variant="outline"
+                                    className="h-8 text-[12px]"
+                                >
+                                    Add friend
+                                </ActionButton>
+                            )}
+                            {recentStatus === 'pending-sent' && (
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="flex-1 h-8 rounded-control border border-line-2 text-[12px] text-ink-4 cursor-not-allowed"
+                                >
+                                    Requested
+                                </button>
+                            )}
+                            {recentStatus === 'pending-received' && (
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="flex-1 h-8 rounded-control border border-line-2 text-[12px] text-ink-4 cursor-not-allowed"
+                                >
+                                    Wants to be friends
+                                </button>
+                            )}
+                            {recentStatus === 'friends' && (
+                                <button
+                                    type="button"
+                                    disabled
+                                    className="flex-1 h-8 rounded-control border border-line-2 text-[12px] text-ink-4 cursor-not-allowed"
+                                >
+                                    Friends
+                                </button>
+                            )}
+                            <button
+                                type="button"
+                                disabled
+                                className="flex-1 h-8 rounded-control border border-line-2 text-[12px] text-ink-4 cursor-not-allowed"
+                            >
+                                Block
+                            </button>
+                        </div>
+                    </>
+                ) : (
+                    <p className="text-[12px] leading-[1.5] text-ink-3">
+                        No duos yet — find a match to build your history.
+                    </p>
+                )}
             </Card>
         </div>
     );

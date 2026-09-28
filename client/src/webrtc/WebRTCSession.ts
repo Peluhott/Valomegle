@@ -1,3 +1,5 @@
+import apiClient from "../api/client";
+
 export type CallConnectionState =
   | "connecting"
   | "connected"
@@ -12,7 +14,30 @@ interface WebRTCSessionCallbacks {
   onError(error: Error): void;
 }
 
-const ICE_SERVERS: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+interface TurnCredentials {
+  url: string;
+  username: string;
+  credential: string;
+}
+
+// Short-lived TURN credentials minted per-call by the backend (turn/TurnController.java)
+// instead of a static config value, so nothing permanent is ever shipped to the client.
+// Falls back to STUN-only on failure rather than blocking the call.
+async function fetchIceServers(): Promise<RTCIceServer[]> {
+  const iceServers: RTCIceServer[] = [{ urls: "stun:stun.l.google.com:19302" }];
+
+  try {
+    const response = await apiClient.get<TurnCredentials>("/api/turn/credentials");
+    const { url, username, credential } = response.data;
+    if (url && username && credential) {
+      iceServers.push({ urls: url, username, credential });
+    }
+  } catch (error) {
+    console.warn("Failed to fetch TURN credentials, falling back to STUN-only:", error);
+  }
+
+  return iceServers;
+}
 
 function isRTCSessionDescriptionInit(
   value: unknown,
@@ -55,11 +80,13 @@ export class WebRTCSession {
   }
 
   async startCall(targetUserId: string): Promise<void> {
-    this.resetState(targetUserId);
-    const myGeneration = this.generation;
+    const myGeneration = this.beginSession(targetUserId);
 
     let acquiredStream: MediaStream | null = null;
     try {
+      const pc = await this.createPeerConnection(myGeneration);
+      if (!pc) return;
+
       const stream = await this.acquireLocalStream();
       acquiredStream = stream;
 
@@ -68,9 +95,6 @@ export class WebRTCSession {
         if (this.localStream === stream) this.localStream = null;
         return;
       }
-
-      const pc = this.pc;
-      if (!pc) return;
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
@@ -87,11 +111,13 @@ export class WebRTCSession {
     fromUserId: string,
     offer: RTCSessionDescriptionInit,
   ): Promise<void> {
-    this.resetState(fromUserId);
-    const myGeneration = this.generation;
+    const myGeneration = this.beginSession(fromUserId);
 
     let acquiredStream: MediaStream | null = null;
     try {
+      const pc = await this.createPeerConnection(myGeneration);
+      if (!pc) return;
+
       const stream = await this.acquireLocalStream();
       acquiredStream = stream;
 
@@ -100,9 +126,6 @@ export class WebRTCSession {
         if (this.localStream === stream) this.localStream = null;
         return;
       }
-
-      const pc = this.pc;
-      if (!pc) return;
 
       stream.getTracks().forEach((track) => pc.addTrack(track, stream));
 
@@ -174,11 +197,23 @@ export class WebRTCSession {
     this.callbacks.onConnectionStateChange("disconnected");
   }
 
-  private resetState(peerUserId: string): void {
+  // Synchronous teardown + generation bump, so a caller can capture "its" generation
+  // before the async createPeerConnection() step below - see that method's comment.
+  private beginSession(peerUserId: string): number {
     this.teardown();
     this.currentPeerUserId = peerUserId;
+    return this.generation;
+  }
 
-    const pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
+  // Fetching TURN credentials is async, unlike the rest of session setup, so a
+  // concurrent hangUp()/beginSession() could race in before this resolves. Guard with
+  // the generation captured by the caller's beginSession() call rather than assuming
+  // no interleaving can happen between teardown and construction.
+  private async createPeerConnection(myGeneration: number): Promise<RTCPeerConnection | null> {
+    const iceServers = await fetchIceServers();
+    if (this.generation !== myGeneration) return null;
+
+    const pc = new RTCPeerConnection({ iceServers });
 
     pc.onicecandidate = (event) => {
       if (this.pc !== pc) return;
@@ -217,6 +252,7 @@ export class WebRTCSession {
     };
 
     this.pc = pc;
+    return pc;
   }
 
   private async acquireLocalStream(): Promise<MediaStream> {

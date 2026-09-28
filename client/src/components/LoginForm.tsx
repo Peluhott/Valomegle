@@ -18,8 +18,7 @@ export default function LoginForm({ handleSwitchForm }: LoginFormProps) {
         setError('');
         setLoading(true);
         try {
-            const response = await apiClient.post('/api/users/login', { username, password });
-            localStorage.setItem('token', response.data);
+            await apiClient.post('/api/users/login', { username, password });
             navigate('/dashboard');
         } catch {
             setError('Invalid username or password.');

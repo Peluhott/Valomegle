@@ -1,5 +1,7 @@
 package com.sedanodev.valomegle.websocket;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.socket.WebSocketHandler;
@@ -12,17 +14,20 @@ import org.springframework.web.socket.config.annotation.WebSocketHandlerRegistry
 public class WebSocketConfig implements WebSocketConfigurer {
 
     private final WebSocketHandler webSocketHandler;
+    private final JwtHandshakeInterceptor jwtHandshakeInterceptor;
 
     @Value("${app.allowed-origins}")
-    private String[] allowedOrigins;
+    private List<String> allowedOrigins;
 
-    public WebSocketConfig(WebSocketHandler webSocketHandler) {
+    public WebSocketConfig(WebSocketHandler webSocketHandler, JwtHandshakeInterceptor jwtHandshakeInterceptor) {
         this.webSocketHandler = webSocketHandler;
+        this.jwtHandshakeInterceptor = jwtHandshakeInterceptor;
     }
 
     @Override
     public void registerWebSocketHandlers(WebSocketHandlerRegistry registry) {
         registry.addHandler(webSocketHandler, "/ws")
-                .setAllowedOrigins(allowedOrigins);
+                .setAllowedOrigins(allowedOrigins.toArray(String[]::new))
+                .addInterceptors(jwtHandshakeInterceptor);
     }
 }

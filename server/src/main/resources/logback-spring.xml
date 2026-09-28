@@ -2,11 +2,14 @@
 <!--
 Providing this file makes Spring Boot skip its own default logback setup, so the
 shared pieces are pulled back in by the includes below. The main file appender
-(FILE -> logs/valomegle.log) and log levels stay driven by application.properties;
-this file only adds the errors-only, date-labelled appender.
+(FILE -> logs/valomegle.log), the console appender, and log levels stay driven by
+application.properties; this file only adds the errors-only, date-labelled appender.
+Console output is OFF locally (logging.threshold.console) and switched on in the
+prod container with LOGGING_THRESHOLD_CONSOLE=INFO so `docker compose logs` works.
 -->
 <configuration>
     <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
     <include resource="org/springframework/boot/logging/logback/file-appender.xml"/>
 
     <property name="LOG_DIR" value="logs"/>
@@ -30,6 +33,7 @@ this file only adds the errors-only, date-labelled appender.
     </appender>
 
     <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
         <appender-ref ref="FILE"/>
         <appender-ref ref="ERROR_FILE"/>
     </root>

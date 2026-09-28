@@ -1,0 +1,49 @@
+# Production stack for a single EC2 instance behind CloudFront - see DEPLOYMENT.md.
+# Standalone rather than an override of docker-compose.yml so that Redis and the
+# backend publish no host ports: only nginx (80) and coturn are reachable.
+#
+#   docker compose -f docker-compose.prod.yml up -d --build
+services:
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+
+  coturn:
+    image: coturn/coturn:latest
+    restart: unless-stopped
+    # Host networking so the 3478 + relay port range bind directly on the instance
+    # instead of going through Docker's NAT.
+    network_mode: host
+    command:
+      - "-c"
+      - "/etc/coturn/turnserver.prod.conf"
+      - "--static-auth-secret=${TURN_SECRET}"
+      - "--external-ip=${TURN_PUBLIC_IP}/${TURN_PRIVATE_IP}"
+    volumes:
+      - ./coturn/turnserver.prod.conf:/etc/coturn/turnserver.prod.conf:ro
+
+  backend:
+    build: ./server
+    restart: unless-stopped
+    depends_on: [redis]
+    environment:
+      DB_URL: ${DB_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS}
+      REDIS_HOST: redis
+      TURN_URL: ${TURN_URL}
+      TURN_SECRET: ${TURN_SECRET}
+      LOGGING_THRESHOLD_CONSOLE: INFO
+
+  frontend:
+    build:
+      context: ./client
+    restart: unless-stopped
+    depends_on: [backend]
+    # Empty = same origin: nginx proxies /api and /ws to the backend.
+    environment:
+      API_BASE_URL: ""
+      WS_BASE_URL: ""
+    ports: ["80:80"]

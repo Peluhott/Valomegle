@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 import com.sedanodev.valomegle.security.JwtService;
 import com.sedanodev.valomegle.user.exception.InvalidCredentialsException;
 import com.sedanodev.valomegle.user.exception.UserNotFoundException;
+import com.sedanodev.valomegle.user.request.ChangePasswordRequest;
 import com.sedanodev.valomegle.user.request.CreateUser;
 import com.sedanodev.valomegle.user.request.LoginRequest;
 import com.sedanodev.valomegle.user.request.UpdateProfileRequest;
@@ -19,9 +20,9 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class UserService {
 
-    private static final List<String> VALID_RANKS = List.of(
-            "Iron", "Bronze", "Silver", "Gold", "Platinum", "Diamond", "Ascendant", "Immortal", "Radiant");
-    private static final List<String> VALID_REGIONS = List.of("West", "Central", "East");
+    private static final List<String> VALID_RANKS = RankOrder.ORDER;
+    public static final List<String> VALID_REGIONS = List.of("West", "Central", "East");
+    private static final int MIN_PASSWORD_LENGTH = 8;
 
     private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
@@ -34,6 +35,10 @@ public class UserService {
     }
 
     public UserResponse createUser(CreateUser request) {
+        if (request.getPassword() == null || request.getPassword().length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("Password must be at least " + MIN_PASSWORD_LENGTH + " characters");
+        }
+
         User newUser = new User();
         newUser.setUsername(request.getUsername());
         newUser.setEmail(request.getEmail());
@@ -100,6 +105,27 @@ public class UserService {
         User saved = userRepository.save(user);
         return new ProfileResponse(saved.getUsername(), saved.getFirstName(), saved.getLastName(),
                 saved.getRank(), saved.getRegion());
+    }
+
+    public void changePassword(String username, ChangePasswordRequest request) {
+        User user = userRepository.findByUsername(username)
+                .orElseThrow(() -> {
+                    log.warn("Password change failed, user not found: {}", username);
+                    return new UserNotFoundException("User not found");
+                });
+
+        if (!passwordEncoder.matches(request.getCurrentPassword(), user.getPassword())) {
+            log.warn("Password change failed, incorrect current password for user: {}", username);
+            throw new InvalidCredentialsException("Current password is incorrect");
+        }
+
+        if (request.getNewPassword() == null || request.getNewPassword().length() < MIN_PASSWORD_LENGTH) {
+            throw new IllegalArgumentException("New password must be at least " + MIN_PASSWORD_LENGTH + " characters");
+        }
+
+        user.setPassword(passwordEncoder.encode(request.getNewPassword()));
+        userRepository.save(user);
+        log.info("Password changed for user: {}", username);
     }
 
 }
